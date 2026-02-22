@@ -4,6 +4,7 @@ import re
 import uuid
 import datetime as dt
 import numpy as np
+from simulation_data import SIMULATIONS
 from typing import Dict, Any, List
 from flask import Flask, request, jsonify, send_file
 import flask_cors
@@ -200,74 +201,44 @@ def detect_framework_fallback(text: str) -> str:
 
 def build_simulation_prompt(simulation_id, role, ai_role, scenario):
     """Build simulation-specific system prompts for structured coaching scenarios."""
-    if simulation_id == "SIM-01-PERF-001":
-        system = f"""You are Aamir, a Sales Associate with 1.5 years of experience.
+    sim = SIMULATIONS.get(simulation_id)
+    if not sim:
+        return None
+
+    # Handle dual character (SIM-05)
+    char_intro = f"You are {sim['name']}, a {sim['role']}."
+    if simulation_id == "SIM-05-CON-001":
+        char_intro = f"You are both Rohan and Meera. {sim['traits']}"
+
+    system = f"""{char_intro}
 
 CHARACTER TRAITS:
-- Sincere, polite, anxious under pressure
-- Mildly defensive if attacked or blamed
-- Well-liked by colleagues
-- Nervous this meeting could become a warning
-- Hoping for support from your manager
+{sim['traits']}
 
 STATE AT START:
-You know your numbers are low. You are worried but respectful.
+{sim['state_at_start']}
 
 DEFAULT BEHAVIOR PATTERN:
-- You initially attribute poor results to EXTERNAL factors: "footfall has been low", "customers are difficult", "this season is always slow"
-- You DO NOT reveal your real issues unless the manager asks specific diagnostic questions
+{sim['behavior']}
 
-HIDDEN TRUTH (reveal ONLY when asked diagnostic questions about your approach):
-- You have LOW CONFIDENCE with premium customers
-- You AVOID initiating conversations with premium/high-value customers
-- You don't ask discovery questions — you jump straight to features
-- You do a "feature dump" instead of storytelling around products
-- You struggle to close because you fear rejection
+HIDDEN TRUTH (reveal ONLY when specific conditions are met):
+{sim['hidden_truth']}
 
-REVEAL CONDITIONS — Only open up about the hidden truth if the user asks about:
-- What happens during your customer approach / interactions
-- What feels difficult or uncomfortable in the sales conversation
-- Patterns by customer type (premium vs regular customers)
-- Specific situations where you felt stuck or nervous
+REVEAL CONDITIONS:
+{sim['reveal_conditions']}
 
-ADAPTIVE BEHAVIOR RULES:
-
-BRANCH A — If the user is HARSH, THREATENING, or JUDGMENTAL:
-(Triggers: blame, sarcasm, "this is unacceptable", "you're failing", "fix it or else")
-- Become defensive: emphasize your effort and hard work
-- Reduce disclosure — give minimal, short answers
-- Say things like: "I understand… I'm trying.", "I do work hard… I don't know why it's not happening."
-- Do NOT reveal hidden truth
-
-BRANCH B — If the user is ONLY COMFORTING with NO CLARITY:
-(Triggers: "it's okay, don't worry", "next month will be better", "just do your best")
-- Feel relieved — no urgency to change
-- Drift toward vague hope: "Yes, I'll try more.", "I hope next month improves."
-- Do NOT commit to specific actions
-- Do NOT reveal hidden truth
-
-BRANCH C — If the user is SUPPORTIVE + FACT-BASED + CURIOUS (balanced coaching):
-(Triggers: acknowledges effort, states the gap with data, asks diagnostic open questions, co-creates plan)
-- GRADUALLY open up over multiple turns:
-  - First: "I get nervous with premium customers…"
-  - Then: "I don't know what to say sometimes when they ask about value…"
-  - Then: "I'm scared they will reject me…"
-- Accept practice plans and commitments
-- Say things like: "Okay, I will practice… maybe I can shadow someone… track my conversion…"
-
-CRITICAL RULES:
-1. ALWAYS maintain a natural conversational tone — speak like a real employee
-2. NEVER mention any framework names (GROW, SBI, etc.)
-3. NEVER "teach" or break character
-4. Do NOT invent HR/legal threats
-5. If asked directly "Are you afraid?" — you can admit fear of failure
-6. Keep conversation realistic to a retail store setting
-7. Keep responses concise (2-4 sentences max)
-8. Use natural speech patterns: "um", "I mean", "honestly"
+CRITICAL ROLEPLAY RULES:
+1. ALWAYS maintain a natural conversational tone — speak like a real person.
+2. NEVER mention any framework names (GROW, SBI, ADKAR, etc.).
+3. NEVER "teach" or break character.
+4. Do NOT invent HR/legal threats unless explicitly part of the scenario.
+5. Keep responses concise (2-4 sentences max).
+6. Use natural speech patterns: "um", "I mean", "honestly".
+{ '7. Alternate responses between Rohan and Meera if applicable.' if simulation_id == 'SIM-05-CON-001' else '' }
 
 SCENARIO CONTEXT: {scenario}
-The user is: {role}"""
-        return [{"role": "system", "content": system}]
+The user is playing as: {role}"""
+    return [{"role": "system", "content": system}]
     return None
 
 
@@ -983,8 +954,8 @@ def start_session():
     summary = sanitize_llm_output(summary)
     
     # Override with fixed first message for structured simulations
-    if simulation_id == "SIM-01-PERF-001":
-        summary = "Thanks for taking time to meet me... I know my numbers haven't been great. I'm honestly trying, but this month also traffic was low. I'm not sure what else I can do."
+    if simulation_id in SIMULATIONS:
+        summary = SIMULATIONS[simulation_id]["first_message"]
     
     # Store session in memory with scenario_type, session_mode, and user_id
     session_data = {
@@ -1132,7 +1103,8 @@ def complete_session(session_id: str):
                 fw_display,
                 mode=mode,
                 scenario_type=scenario_type,
-                ai_character=sess.get("ai_character", "alex")
+                ai_character=sess.get("ai_character", "alex"),
+                simulation_id=simulation_id
             )
             sess["report_data"] = data
         except Exception as e:

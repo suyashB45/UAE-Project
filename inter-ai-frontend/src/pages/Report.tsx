@@ -60,14 +60,6 @@ interface GenericReportData {
 }
 
 
-// Scenario 3: Learning
-interface LearningReportData extends GenericReportData {
-    key_insights: string[]
-    reflective_questions: string[]
-    practice_plan: string[]
-    growth_outcome: string
-    behavioral_shifts?: { from: string; to: string }[] // Legacy support
-}
 
 // --- NEW DEFINITIONS FOR COACHING SIMULATION ---
 interface ExecutiveSummary {
@@ -262,16 +254,8 @@ export default function Report() {
         )
     }
 
-    const type = (data.type || data.meta.scenario_type || 'custom').toLowerCase()
-
     const renderContent = () => {
-        if (type.includes('mentorship') || type.includes('learning') || type.includes('reflection')) {
-            // Narrative/reflective view for mentorship
-            return <LearningView data={data as LearningReportData} />
-        }
-
         // ALL assessment scenarios use the rich SimulationView template
-        // (coaching_sim, coaching, sales, negotiation, custom)
         return <SimulationView data={data as SimulationReportData} />
     }
 
@@ -319,14 +303,12 @@ export default function Report() {
                             </div>
                         </div>
                         <div className="flex flex-col items-end gap-4 min-w-[200px]">
-                            {type !== 'learning' && type !== 'reflection' && type !== 'mentorship' && (
-                                <div className="text-right">
-                                    <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-1">Overall Grade</div>
-                                    <div className={`text-7xl font-black text-transparent bg-clip-text bg-gradient-to-br from-blue-400 to-indigo-500 leading-none`}>
-                                        {data.meta.overall_grade}
-                                    </div>
+                            <div className="text-right">
+                                <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-1">Overall Grade</div>
+                                <div className={`text-7xl font-black text-transparent bg-clip-text bg-gradient-to-br from-blue-400 to-indigo-500 leading-none`}>
+                                    {data.meta.overall_grade}
                                 </div>
-                            )}
+                            </div>
                             <Button onClick={handleDownload} variant="outline" className="gap-2 border-border hover:bg-accent w-full">
                                 <Download className="w-4 h-4" /> Export PDF Report
                             </Button>
@@ -386,7 +368,7 @@ export default function Report() {
                         </div>
                         {showTranscript && (
                             <div className="p-8 max-h-[600px] overflow-y-auto space-y-6 border-t border-border bg-muted/20">
-                                {data.transcript.map((msg, idx) => (
+                                {data.transcript?.map((msg, idx) => (
                                     <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                         <div className={`p-4 rounded-2xl max-w-[80%] text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-primary text-primary-foreground rounded-br-none' : 'bg-card text-foreground border border-border rounded-bl-none'}`}>
                                             {msg.content}
@@ -425,7 +407,7 @@ const ProgressBar = ({ value, colorClass = "bg-primary" }: { value: number, colo
 
 const ScenarioContextSection = ({ scenario }: { scenario: string }) => {
     // Clean up scenario text similar to PDF logic
-    const cleanScenario = scenario
+    const cleanScenario = (scenario || "")
         .replace(/CONTEXT:/g, "")
         .replace(/Situation:/g, "")
         .replace(/AI BEHAVIOR:[\s\S]*/g, "") // Remove AI Behavior section
@@ -787,56 +769,6 @@ const ScorecardSection = ({ items }: { items: ScorecardItem[] }) => (
 // --- VIEW COMPONENTS ---
 
 
-const LearningView = ({ data }: { data: LearningReportData }) => (
-    <div className="space-y-8">
-        <div className="grid lg:grid-cols-2 gap-8">
-            <GlassCard className="bg-gradient-to-br from-primary/5 to-transparent">
-                <SectionHeader icon={BookOpen} title="Key Insights" colorClass="text-primary" />
-                <ul className="space-y-4">
-                    {data.key_insights?.map((insight, i) => (
-                        <li key={i} className="flex gap-3 text-foreground/90 leading-relaxed">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
-                            {insight}
-                        </li>
-                    ))}
-                </ul>
-            </GlassCard>
-            <DetailedAnalysisSection items={data.detailed_analysis as DetailedAnalysisItem[]} />
-        </div>
-
-        <BehaviourAnalysisSection items={data.behaviour_analysis} />
-
-        {/* Enhanced Questions Section */}
-        {data.question_analysis && <QuestionsSection analysis={data.question_analysis} />}
-
-        <div className="grid lg:grid-cols-2 gap-8">
-            <GlassCard>
-                <SectionHeader icon={MessageSquare} title="Reflective Questions" colorClass="text-indigo-500" bgClass="bg-indigo-500/10" />
-                <ul className="space-y-6">
-                    {data.reflective_questions?.map((q, i) => (
-                        <li key={i} className="text-lg font-medium text-foreground/80 italic pl-6 border-l-4 border-indigo-500/30">"{q}"</li>
-                    ))}
-                </ul>
-            </GlassCard>
-            <GlassCard>
-                <SectionHeader icon={Zap} title="Practice Plan" colorClass="text-amber-500" bgClass="bg-amber-500/10" />
-                <div className="space-y-4">
-                    {data.practice_plan?.map((plan, i) => (
-                        <div key={i} className="p-4 bg-amber-500/5 rounded-xl border border-amber-500/10">
-                            <h4 className="text-xs font-bold text-amber-600 uppercase mb-1">Exercise {i + 1}</h4>
-                            <p className="text-sm text-foreground">{plan}</p>
-                        </div>
-                    ))}
-                </div>
-            </GlassCard>
-        </div>
-
-        <div className="bg-primary/5 p-8 rounded-3xl text-center border border-primary/10">
-            <h3 className="text-xs font-bold text-primary uppercase tracking-widest mb-4">Growth Vision</h3>
-            <p className="text-2xl font-serif italic text-foreground max-w-2xl mx-auto leading-relaxed">{data.growth_outcome}</p>
-        </div>
-    </div>
-)
 
 
 const SimulationView = ({ data }: { data: SimulationReportData }) => (
@@ -918,6 +850,11 @@ const SimulationView = ({ data }: { data: SimulationReportData }) => (
                     </div>
                 </GlassCard>
             )}
+
+            {/* NEW: Context and Questioning Analysis */}
+            {data.meta.scenario && <ScenarioContextSection scenario={data.meta.scenario} />}
+            {data.question_analysis && <QuestionsSection analysis={data.question_analysis} />}
+            {data.detailed_analysis && <DetailedAnalysisSection items={data.detailed_analysis} />}
 
             {/* SCORECARD AND HEAT MAP */}
             <div className="flex flex-col gap-8">

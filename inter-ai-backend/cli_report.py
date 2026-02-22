@@ -237,46 +237,8 @@ def parse_json_robustly(json_text):
     return None
 
 def detect_scenario_type(scenario: str, ai_role: str, role: str) -> str:
-    """Detect scenario type based on content to determine report structure."""
-    scenario_lower = scenario.lower()
-    ai_role_lower = ai_role.lower()
-    role_lower = role.lower()
-    
-    combined_text = f"{scenario_lower} {ai_role_lower} {role_lower}"
-
-    # 1. COACHING SIMULATION (New Scored Format)
-    if "good attitude, poor results" in scenario_lower or "sim-01-perf-001" in scenario_lower or "aamir" in scenario_lower or "coaching_sim" in combined_text:
-        return "coaching_sim"
-
-    # 1. REFLECTION / MENTORSHIP (No Scorecard)
-    # Trigger if AI is strictly a "Coach" or "Mentor" (Role-based)
-    if "coach" in ai_role_lower or "mentor" in ai_role_lower:
-        return "reflection"
-    
-    # Trigger if explicit "learning" or "reflection" keywords in text (Topic-based)
-    # Note: Avoid "coach" in text search to prevent matching "Manager coaching staff" (which should be Scored)
-    reflection_keywords = ["reflection", "learning plan", "development plan", "self-reflection"]
-    if any(kw in combined_text for kw in reflection_keywords):
-        return "reflection"
-    
-    # 2. NEGOTIATION / SALES (Scorecard)
-    negotiation_keywords = ["sales", "negotiat", "price", "discount", "buyer", "seller", "deal", "purchase"]
-    if any(kw in combined_text for kw in negotiation_keywords):
-        return "negotiation"
-    
-    # 3. COACHING / LEADERSHIP (Scorecard)
-    # User is the one doing the coaching/managing
-    coaching_keywords = ["coaching", "performance", "feedback", "manager", "supervisor", "staff", "employee"]
-    if any(kw in combined_text for kw in coaching_keywords):
-        return "coaching"
-    
-    # 4. DE-ESCALATION (Scorecard)
-    deescalation_keywords = ["angry", "upset", "complaint", "calm", "de-escalate"]
-    if any(kw in combined_text for kw in deescalation_keywords):
-        return "custom" # Currently maps to Custom but we can add specific later
-    
-    # Default
-    return "custom"
+    """All scenarios use the unified coaching_sim report structure."""
+    return "coaching_sim"
 
 
 def detect_user_role_context(role: str, ai_role: str) -> str:
@@ -312,16 +274,8 @@ def analyze_character_traits(transcript, role, ai_role, scenario, scenario_type)
     
     conversation = "\n".join([f"USER: {t['content']}" for t in user_msgs])
     
-    # Define required traits based on scenario type
-    required_traits_map = {
-        "coaching": ["Openness to Feedback", "Accountability", "Active Listening", "Growth Mindset"],
-        "negotiation": ["Rapport Building", "Active Listening", "Value Focus", "Confidence"],
-        "sales": ["Rapport Building", "Active Listening", "Value Focus", "Confidence"],
-        "learning": ["Curiosity", "Reflection", "Openness"],
-        "mentorship": ["Observation", "Question Asking", "Pattern Recognition"]
-    }
-    
-    required_traits = required_traits_map.get(scenario_type, ["Professional Communication"])
+    # Universal required traits for all scenarios
+    required_traits = ["Active Listening", "Empathy", "Accountability", "Growth Mindset", "Professional Communication"]
     
     prompt = f"""
 You are analyzing a human player's CHARACTER and PERSONALITY in a {scenario_type} simulation.
@@ -484,7 +438,7 @@ Categorize each question and specify optimal timing in the conversation.
         }
 
 
-def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None, mode="coaching", scenario_type=None, ai_character="alex"):
+def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None, mode="coaching", scenario_type=None, ai_character="alex", simulation_id=None):
     """
     Generate report data using SCENARIO-SPECIFIC structures.
     """
@@ -517,478 +471,101 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         meta["summary"] = "Session started but no interaction recorded."
         return { "meta": meta, "type": scenario_type }
 
-    # Determine Report Mode based on User Role Context
-    # RULE: If User is PERFORMER -> EVALUATION (Scored)
-    # RULE: If User is EVALUATOR -> MENTORSHIP (Unscored)
-    
-    is_user_performer = False
-    if scenario_type == "coaching":
-        # User is Staff (Performer) vs Manager (Evaluator)
-        if user_context == "staff": is_user_performer = True
-    elif scenario_type == "negotiation":
-        # User is Seller (Performer) vs Buyer (Evaluator)
-        if user_context == "seller": is_user_performer = True
-    
     # -------------------------------------------------------------
-    # BUILD SPECIFIC PROMPTS BASED ON SCENARIO TYPE & ROLE
+    # UNIFIED PROMPT: Every scenario uses the same 15-section Rich Structure
     # -------------------------------------------------------------
     
-    unified_instruction = ""
+    # Universal scorecard dimensions mapping for structured simulations
+    SIMULATION_DIMENSIONS = {
+        "SIM-01-PERF-001": "Empathy & Respect, Clarity with Facts, Coaching Questions, Ownership Creation, Action Plan Quality, Follow-up Discipline",
+        "SIM-02-BEH-001": "Behavioural Clarity, Separation of Identity vs Behaviour, Emotional Regulation, Ownership Creation, Team Culture Framing, Action Commitment & Follow-up",
+        "SIM-03-MOT-001": "Observational Awareness, Non-judgmental Curiosity, Emotional Validation, Diagnostic Depth, Re-engagement Strategy, Follow-up Structure",
+        "SIM-04-COM-001": "Emotional Regulation under Pressure, Data-Backed Argumentation, Structured Communication, Assertiveness without Defensiveness, Solution Orientation, Credibility Building",
+        "SIM-05-CON-001": "Neutrality Maintenance, Emotional De-escalation, Balanced Participation, Root Cause Identification, Shared Solution Creation, Clear Agreement & Follow-up",
+        "SIM-06-CUST-001": "Emotional Stability Under Pressure, Accountability Framing, Clarification Quality, Non-Defensive Communication, Solution Structuring, Confidence & Credibility",
+        "SIM-07-LEAD-001": "Expectation Clarity, Non-Blaming Language, Ownership Transfer, Empowerment vs Micromanagement Balance, Accountability Structure, Confidence Reinforcement",
+        "SIM-08-CHG-001": "Non-Defensive Listening, Curiosity & Exploration, Emotional Validation, Change Purpose Framing, Ownership Activation, Influence Management",
+        "SIM-09-CAR-001": "Emotional Validation, Clarity of Developmental Feedback, Specific Behaviour Examples, Future-Focused Framing, Growth Roadmap Definition, Motivation Reinforcement",
+        "SIM-10-WELL-001": "Observational Sensitivity, Psychological Safety Creation, Emotional Validation, Avoidance of Premature Solutions, Sustainable Adjustment Planning, Accountability Balance"
+    }
     
-    if scenario_type == "coaching_sim":
-        unified_instruction = """
-### SCENARIO: COACHING SIMULATION (Good Attitude, Poor Results)
-**GOAL**: Evaluate the manager's ability to coach an underperforming but well-meaning employee.
-**MODE**: EVALUATION (Scored Simulation).
-**CRITICAL RULE**: USE SIMPLE, ACCESSIBLE LANGUAGE. The reader is an everyday employee, not a psychologist. Write in plain, encouraging English. Avoid jargon, overly academic words, or complex long-winded sentences.
-**CRITICAL RULE 2**: BE CONCISE AND DIRECT. Keep reasoning, insights, and suggestions to 1-2 crisp, easy-to-read sentences. Do not overwhelm the user with walls of text.
-**CRITICAL RULE 3**: ONLY USE THE TRANSCRIPT AND SITUATION. DO NOT HALLUCINATE EXTERNAL FACTORS. Every insight MUST be grounded in what was actually said.
-**INSTRUCTIONS**:
-1. **BEHAVIORAL RULES**: The user must balance empathy with clear performance facts and actionable follow-ups.
-2. **SCORECARD EXACT DIMENSIONS**: You MUST output EXACTLY 6 dimensions: 'Empathy & Respect', 'Clarity with Facts', 'Coaching Questions', 'Ownership Creation', 'Action Plan Quality', 'Follow-up Discipline'. Each dimension out of 10.
-3. **TONE**: Supportive & Constructive. Focus on actionable growth.
+    # Use simulation-specific dimensions if available, otherwise fallback to universal default
+    scorecard_dimensions = SIMULATION_DIMENSIONS.get(simulation_id, "Empathy & Respect, Clarity with Facts, Coaching Questions, Ownership Creation, Action Plan Quality, Follow-up Discipline")
+
+    unified_instruction = f"""
+### UNIFIED PERFORMANCE ANALYSIS FRAMEWORK
+**GOAL**: Evaluate the User's performance in the provided transcript using a high-premium, structured 15-section audit.
+**MODE**: EVALUATION (Scored Analysis).
+**CRITICAL RULE**: USE SIMPLE, ACCESSIBLE LANGUAGE. The reader is an everyday employee. Write in plain, encouraging English. Avoid jargon.
+**CRITICAL RULE 2**: BE CONCISE AND DIRECT. Keep reasoning, insights, and suggestions to 1-2 crisp, easy-to-read sentences. 
+**CRITICAL RULE 3**: ONLY USE THE TRANSCRIPT AND SITUATION. EVERY insight MUST be grounded in what was actually said.
+
+**SCORECARD EXACT DIMENSIONS**: You MUST output EXACTLY 6 dimensions: {scorecard_dimensions}. Each dimension out of 10.
 
 **OUTPUT JSON STRUCTURE**:
-{
-  "meta": { "scenario_id": "coaching_sim", "outcome_status": "Completed/Incomplete", "overall_grade": "X/10", "summary": "Executive summary of the coaching effectiveness." },
-  "type": "coaching_sim",
-  "executive_summary": {
+{{
+  "meta": {{ "scenario_id": "{scenario_type}", "outcome_status": "Completed/Incomplete", "overall_grade": "X/10", "summary": "Executive summary of effectiveness." }},
+  "type": "unified_report",
+  "executive_summary": {{
     "snapshot": "...", "final_score": "X/10", "strengths_summary": "...", "improvements_summary": "...", "outcome_summary": "..."
-  },
-  "goal_attainment": {
+  }},
+  "goal_attainment": {{
     "score": "X/10", "expectation_vs_reality": "...", "primary_gaps": ["...", "..."], "observation_focus": ["...", "..."]
-  },
-  "coaching_style": {
+  }},
+  "coaching_style": {{
     "primary_style": "Directive | Supportive | Avoidant | Balanced",
-    "description": "Why this style was dominant based purely on the transcript."
-  },
+    "description": "Why this style was dominant."
+  }},
   "deep_dive_analysis": [
-    {"topic": "Psychological Safety Creation", "tone": "...", "language_impact": "...", "comfort_level": "...", "impact": "...", "questions_asked": "...", "exploration": "...", "understanding_depth": "...", "analysis": "..."}
+    {{"topic": "Psychological Safety", "tone": "...", "impact": "...", "analysis": "..."}},
+    {{"topic": "Strategic Communication", "tone": "...", "impact": "...", "analysis": "..."}}
   ],
-  "pattern_summary": "Brief summary of their dominant behavioural pattern.",
+  "pattern_summary": "Brief summary of dominant behavioral pattern.",
   "behaviour_analysis": [
-    {
-      "behavior": "Name of the behavior",
-      "quote": "The exact verbatim line from the transcript demonstrates this.",
-      "insight": "Detailed psychological breakdown based purely on the text.",
+    {{
+      "behavior": "Name",
+      "quote": "Verbatim line",
+      "insight": "Psychological breakdown",
       "impact": "Positive/Negative",
-      "improved_approach": "The exact phrase they SHOULD have used."
-    }
+      "improved_approach": "Alternative phrase"
+    }}
   ],
   "turning_points": [
-    {"point": "e.g., Conversation shifted defensively when...", "timestamp": "Brief context of when it happened in transcript"}
+    {{"point": "Key shift in conversation", "timestamp": "Context"}}
   ],
   "eq_analysis": [
-    {
-      "nuance": "Current Emotion",
-      "observation": "Quote proving this emotion.",
-      "suggestion": "Recommended emotional shift."
-    }
+    {{ "nuance": "Emotion", "observation": "Proof", "suggestion": "Shift" }}
   ],
   "heat_map": [
-    { "dimension": "Empathy", "score": 8 }
+    {{ "dimension": "First Dimension", "score": 8 }}
   ],
   "scorecard": [
-    { 
-      "dimension": "Empathy & Respect", 
+    {{ 
+      "dimension": "Dimension Name", 
       "score": "X/10", 
       "reasoning": "...",
       "quote": "...",
       "suggestion": "...",
-      "alternative_questions": [{"question": "...", "rationale": "..."}]
-    }
+      "alternative_questions": [{{"question": "...", "rationale": "..."}}]
+    }}
   ],
-  "ideal_questions": ["Better question 1", "Better question 2"],
-  "action_plan": {
-    "specific_actions": ["..."], "owner": "...", "timeline": "...", "success_indicators": ["..."]
-  },
-  "follow_up_strategy": {
+  "ideal_questions": ["Missed high-impact question 1", "Missed high-impact question 2"],
+  "action_plan": {{
+    "specific_actions": ["..."], "owner": "User", "timeline": "Short-term", "success_indicators": ["..."]
+  }},
+  "follow_up_strategy": {{
     "review_cadence": "...", "metrics_to_track": ["..."], "accountability_method": "..."
-  },
-  "strengths_and_improvements": {
+  }},
+  "strengths_and_improvements": {{
     "strengths": ["...", "..."], "missed_opportunities": ["...", "..."]
-  },
-  "final_evaluation": {
-    "readiness_level": "...", "maturity_rating": "X/10", "immediate_focus": ["..."], "long_term_suggestion": "..."
-  }
-}
+  }},
+  "final_evaluation": {{
+    "readiness_level": "Level Name", "maturity_rating": "X/10", "immediate_focus": ["..."], "long_term_suggestion": "..."
+  }}
+}}
 """
 
-    elif scenario_type == "coaching":
-        if is_user_performer: # User is STAFF
-            unified_instruction = """
-### SCENARIO: COACHABILITY ASSESSMENT (USER IS STAFF)
-**GOAL**: Evaluate the user's openness to feedback and their ability to pivot behavior.
-**MODE**: EVALUATION (Growth-Oriented Assessment).
-**CRITICAL RULE**: USE SIMPLE, ACCESSIBLE LANGUAGE. The reader is an everyday employee. Write in plain, encouraging English. Avoid jargon, overly academic words, or complex long-winded sentences.
-**CRITICAL RULE 2**: BE CONCISE AND DIRECT. Keep reasoning, insights, and suggestions to 1-2 crisp, easy-to-read sentences. 
-**INSTRUCTIONS**:
-1. **BEHAVIORAL ANALYSIS**: Focus on simple communication signals (tone, pauses, word choice). 
-2. **SCORECARD**: Every score MUST have a "Proof" (quote) and a "Growth Tactic" (specific alternative action).
-3. **JUSTIFY WEAKNESS**: Keep it simple. "You seemed defensive when I asked X, because you replied [quote]."
-4. **ACTIONABLE TIPS**: Do NOT give generic advice (e.g., "Listen better"). Give specific 1-2 sentence DRILLS.
-5. **TONE**: Supportive & Constructive. Focus on actionable growth.
-
-**OUTPUT JSON STRUCTURE**:
-{
-  "meta": { "scenario_id": "coaching", "outcome_status": "Success/Partial/Failure", "overall_grade": "X/10", "summary": "A high-level executive summary of their coachability profile." },
-  "type": "coaching",
-  "eq_analysis": [
-    {
-      "nuance": "Current Emotion (e.g., Defensive)",
-      "observation": "Quote proving this emotion.",
-      "suggestion": "Recommended emotional shift."
-    }
-  ],
-  "behaviour_analysis": [
-    {
-      "behavior": "Name of the behavior (e.g., Defensive Deflection, Active Evaluation)",
-      "quote": "The exact verbatim line from the transcript demonstrates this.",
-      "insight": "Detailed psychological breakdown of why this behavior undermines or aids growth.",
-      "impact": "Positive/Negative",
-      "improved_approach": "The exact phrase they SHOULD have used to build trust."
-    }
-  ],
-  "detailed_analysis": [
-    {"topic": "Psychological Safety Creation", "analysis": "Did they make it safe to give feedback?"},
-    {"topic": "Ownership & Accountability", "analysis": "Did they own the problem or blame external factors?"}
-  ],
-  "scorecard": [
-    { 
-      "dimension": "Professionalism", 
-      "score": "X/10", 
-      "reasoning": "Write a clear, 1-2 sentence explanation of why this score was given. Cite specific evidence.",
-      "quote": "The EXACT verbatim line from the transcript that demonstrates this dimension (good or bad).",
-      "suggestion": "Write a simple 1-2 sentence tip explaining what they should say next time.",
-      "alternative_questions": [{"question": "I appreciate that perspective...", "rationale": "Validates before disagreeing"}]
-    },
-    { 
-      "dimension": "Ownership", 
-      "score": "X/10", 
-      "reasoning": "Write a clear, 1-2 sentence explanation. Show exactly how they handled responsibility.",
-      "quote": "The line where they accepted or dodged responsibility. Must be verbatim.",
-      "suggestion": "Write a simple 1-2 sentence tip telling them what to say next time.",
-      "alternative_questions": [{"question": "That's on me, here is my plan...", "rationale": "Total accountability"}]
-    },
-    { 
-      "dimension": "Active Listening", 
-      "score": "X/10", 
-      "reasoning": "Write a clear, 1-2 sentence explanation of whether they listened or interrupted.",
-      "quote": "Evidence of listening (e.g., a reflective statement) or interrupting (the exact interruption).",
-      "suggestion": "Write a simple 1-2 sentence tip prescribing a better listening technique.",
-      "alternative_questions": [{"question": "So what you're seeing is...", "rationale": "Reflective listening loop"}]
-    },
-    { 
-      "dimension": "Solution Focus", 
-      "score": "X/10", 
-      "reasoning": "Write a clear, 1-2 sentence explanation about the quality of their proposed solutions.",
-      "quote": "The specific proposal they made (verbatim).",
-      "suggestion": "Write a simple 1-2 sentence tip giving an alternative approach.",
-      "alternative_questions": [{"question": "What does success look like to you?", "rationale": "Collaborative problem solving"}]
-    }
-  ],
-  "strengths": ["Write a detailed 1-2 sentence description of high-impact strength 1...", "Write a detailed 1-2 sentence description of high-impact strength 2..."],
-  "missed_opportunities": ["Write a detailed 1-2 sentence description of missed opportunity 1...", "Write a detailed 1-2 sentence description of missed opportunity 2..."],
-  "actionable_tips": ["Write a detailed 1-2 sentence paragraph for Tactic 1...", "Write a detailed 1-2 sentence paragraph for Tactic 2..."]
-}
-"""
-        else: # User is MANAGER (Evaluator -> Mentorship)
-            unified_instruction = """
-### SCENARIO: LEADERSHIP MENTORSHIP (USER IS MANAGER)
-**GOAL**: specific guidance on improving the user's coaching style.
-**MODE**: MENTORSHIP (No Scorecard).
-**INSTRUCTIONS**:
-1. **REFLECTIVE QUESTIONS**: Include a brief "Reference Answer" or "Key Insight" in parentheses for each question to guide self-reflection.
-2. **PRACTICE PLAN**: Must be highly actionable, valid, and specific (e.g., "Use the 5-Whys technique...").
-
-**OUTPUT JSON STRUCTURE**:
-{
-  "meta": { "scenario_id": "learning", "outcome_status": "Completed", "overall_grade": "N/A", "summary": "..." },
-  "type": "learning",
-  "eq_analysis": [
-    {
-      "nuance": "Detected Tone",
-      "observation": "Evidence quote.",
-      "suggestion": "How to shift tone."
-    }
-  ],
-  "behaviour_analysis": [
-    {
-      "behavior": "Name of the behavior (e.g., Empathy)",
-      "quote": "The exact sentence the user said.",
-      "insight": "Why this mattered.",
-      "impact": "Positive/Negative",
-      "improved_approach": "Alternative phrasing."
-    }
-  ],
-  "detailed_analysis": [
-    {"topic": "Coaching Style", "analysis": "Analysis content..."},
-    {"topic": "Empathy & Connection", "analysis": "Analysis content..."}
-  ],
-  "key_insights": ["Insight 1...", "Insight 2..."],
-  "reflective_questions": ["Question 1? (Reference: Key principle...)", "Question 2? (Insight: Look for...)"],
-  "growth_outcome": "Vision of the user as a better leader...",
-  "practice_plan": ["Actionable Drill 1...", "Specific Technique 2..."]
-}
-"""
-            # Override semantic type for Report.tsx to render Learning View
-            scenario_type = "learning" 
-
-    elif scenario_type == "negotiation": 
-        if is_user_performer: # User is SELLER
-            unified_instruction = """
-### SCENARIO: SALES PERFORMANCE ASSESSMENT (USER IS SELLER)
-**GOAL**: Generate a High-Performance Sales Audit.
-**MODE**: EVALUATION (Commercial Excellence).
-**CRITICAL RULE**: USE SIMPLE, ACCESSIBLE LANGUAGE. The reader is an everyday employee. Write in plain, encouraging English. Avoid jargon, overly complex words, or long-winded sentences.
-**CRITICAL RULE 2**: BE CONCISE AND DIRECT. Keep reasoning, insights, and suggestions to 1-2 crisp, easy-to-read sentences. Do not overwhelm the user with walls of text.
-**INSTRUCTIONS**:
-1. **REVENUE FOCUS**: Evaluate every behavior based on its likelihood to CLOSE THE DEAL or KILL THE DEAL.
-2. **EVIDENCE**: You cannot give a score without citing the exact quote that justifies it.
-3. **JUSTIFY THE LOSS**: If they lost the deal, explain exactly where they lost it in 1-2 sentences. 
-4. **RECOMMENDATIONS**: Must be commercially focused and specific. "Ask open questions" is bad. "Ask 'How does this impact your Q3 goals?'" is good.
-
-**OUTPUT JSON STRUCTURE**:
-{
-  "meta": { "scenario_id": "sales", "outcome_status": "Closed/Negotiating/Lost", "overall_grade": "X/10", "summary": "Executive summary of commercial impact." },
-  "type": "sales",
-  "eq_analysis": [
-    {
-      "nuance": "Buyer Sentiment / User EQ",
-      "observation": "Evidence of emotional read.",
-      "suggestion": "How to better align with buyer emotion."
-    }
-  ],
-  "behaviour_analysis": [
-    {
-      "behavior": "Name of the behavior (e.g., Feature Dumping, Strategic Pausing)",
-      "quote": "The exact sentence used.",
-      "insight": "Why this behavior increased or decreased deal velocity.",
-      "impact": "Positive/Negative",
-      "improved_approach": "The winning line they should have used."
-    }
-  ],
-  "suggested_questions": [
-    "A specific, commercial question the user SHOULD HAVE ASKED.",
-    "A high-impact discovery question they missed."
-  ],
-  "detailed_analysis": [
-    {"topic": "Sales Methodology", "analysis": "Did they follow a structured path (e.g., MEDDIC/SPIN)?"},
-    {"topic": "Value Proposition", "analysis": "Did they sell the 'Why' or just the 'What'?"}
-  ],
-  "scorecard": [
-    { 
-      "dimension": "Rapport Building", 
-      "score": "X/10", 
-      "reasoning": "Write a clear, 1-2 sentence explanation PROVING WHY this score was given.",
-      "quote": "The exact rapport attempt (or lack thereof). Must be verbatim from transcript.",
-      "suggestion": "Write a simple 1-2 sentence tip telling them EXACTLY what to say instead.",
-      "alternative_questions": [{"question": "I noticed you... How is that impacting X?", "rationale": "Connects observation to business pain"}]
-    },
-    { 
-      "dimension": "Needs Discovery", 
-      "score": "X/10", 
-      "reasoning": "Write a clear, 1-2 sentence explanation PROVING WHY this score was given. Did they ask good questions?",
-      "quote": "The critical discovery question asked or missed. Must be word-for-word from the transcript.",
-      "suggestion": "Write a simple 1-2 sentence tip giving them the EXACT question they should have asked.",
-      "alternative_questions": [{"question": "What happens if you don't solve this?", "rationale": "Implication question (SPIN)"}]
-    },
-    { 
-      "dimension": "Value Articulation", 
-      "score": "X/10", 
-      "reasoning": "Write a clear, 1-2 sentence explanation PROVING WHY this score was given.",
-      "quote": "The value pitch. Exact words from transcript.",
-      "suggestion": "Write a simple 1-2 sentence tip prescribing the EXACT value statement.",
-      "alternative_questions": [{"question": "Based on what you said about X, here is how Y helps...", "rationale": "Direct solution mapping"}]
-    },
-    { 
-      "dimension": "Objection Handling", 
-      "score": "X/10", 
-      "reasoning": "Write a clear, 1-2 sentence explanation PROVING WHY this score was given.",
-      "quote": "Their response to the pushback. Word-for-word.",
-      "suggestion": "Write a simple 1-2 sentence tip giving them the EXACT objection handling script.",
-      "alternative_questions": [{"question": "It sounds like cost is a major factor...", "rationale": "Labeling the objection"}]
-    },
-    { 
-      "dimension": "Closing", 
-      "score": "X/10", 
-      "reasoning": "Write a clear, 1-2 sentence explanation PROVING WHY this score was given.",
-      "quote": "The closing line. Must be verbatim.",
-      "suggestion": "Write a simple 1-2 sentence tip giving them the EXACT close.",
-      "alternative_questions": [{"question": "Does it make sense to start the paperwork?", "rationale": "Assumptive Close"}]
-    }
-  ],
-  "sales_recommendations": ["Write a detailed 3-4 sentence paragraph for Commercial Insight 1...", "Write a detailed 3-4 sentence paragraph for Commercial Insight 2...", "Write a detailed 3-4 sentence paragraph for Commercial Insight 3..."]
-}
-"""
-        else: # User is BUYER (Evaluator -> Mentorship)
-            unified_instruction = """
-### SCENARIO: BUYER STRATEGY MENTORSHIP (USER IS BUYER)
-**GOAL**: specific guidance on how to negotiate better deals as a buyer.
-**MODE**: MENTORSHIP (No Scorecard).
-**INSTRUCTIONS**:
-1. **REFLECTIVE QUESTIONS**: Provide a "Reference Insight" for each question.
-2. **PRACTICE PLAN**: Detailed, realistic tactics for a buyer.
-
-**OUTPUT JSON STRUCTURE**:
-{
-  "meta": { "scenario_id": "learning", "outcome_status": "Completed", "overall_grade": "N/A", "summary": "..." },
-  "type": "learning",
-  "eq_analysis": [
-    {
-      "nuance": "Negotiation stance",
-      "observation": "Evidence.",
-      "suggestion": "Adjustment."
-    }
-  ],
-  "behaviour_analysis": [
-    {
-      "behavior": "Behavior Name",
-      "quote": "Evidence quote.",
-      "insight": "Analysis.",
-      "impact": "Positive/Negative",
-      "improved_approach": "Suggestion."
-    }
-  ],
-  "detailed_analysis": [
-    {"topic": "Negotiation Power", "analysis": "Analysis content..."},
-    {"topic": "Leverage Usage", "analysis": "Analysis content..."}
-  ],
-  "key_insights": ["Insight 1...", "Insight 2..."],
-  "reflective_questions": ["Question? (Insight: Power leverage comes from...)", "Question? (Reference: BATNA...)"],
-  "growth_outcome": "Vision of the user as a stronger negotiator...",
-  "practice_plan": ["Tactic: Walk away when...", "Drill: Ask for 3 concessions..."]
-}
-"""
-            # Override semantic type for Report.tsx to render Learning View
-            scenario_type = "learning"
-
-    elif scenario_type == "mentorship":
-        unified_instruction = """
-### SCENARIO: EXPERT MENTORSHIP (REVERSE ROLE)
-**GOAL**: Generate a "Key Takeaways" summary for the user who observed the AI.
-**MODE**: MENTORSHIP (Observation).
-**INSTRUCTIONS**:
-1. **NO SCORES**: Do not grade the user (or the AI).
-2. **FOCUS**: Explain the *strategy* behind what the AI did.
-3. **SUGGESTED QUESTIONS**: List questions the user *could have asked* to learn more.
-
-**OUTPUT JSON STRUCTURE**:
-{
-  "meta": { "scenario_id": "mentorship", "outcome_status": "Completed", "overall_grade": "N/A", "summary": "Brief summary of the lesson demonstrated." },
-  "type": "mentorship",
-  "eq_analysis": [
-    {
-      "nuance": "Expert Emotional Control",
-      "observation": "How the expert handled emotion.",
-      "suggestion": "What you can learn from this."
-    }
-  ],
-  "behaviour_analysis": [
-    {
-      "behavior": "Key Technique Demonstrated",
-      "quote": "The exact line the AI (Expert) used.",
-      "insight": "Why this technique works.",
-      "impact": "Positive",
-      "improved_approach": "N/A"
-    }
-  ],
-  "suggested_questions": [
-    "Question you could ask to deeper understand the strategy...",
-    "Question about alternative approaches..."
-  ],
-  "detailed_analysis": [
-    {"topic": "Strategic Intent", "analysis": "Why the AI chose this path..."},
-    {"topic": "Key Principles", "analysis": "The core rules applied here..."}
-  ],
-  "key_insights": ["Principle 1...", "Principle 2..."],
-  "reflective_questions": ["How would you have handled X differently?", "What did you notice about Y?"],
-  "growth_outcome": "Understanding of expert-level execution.",
-  "practice_plan": ["Try this technique in your next real conversation..."]
-}
-"""
-
-    elif scenario_type == "reflection" or scenario_type == "learning":
-        unified_instruction = """
-### SCENARIO: PERSONAL LEARNING PLAN
-**GOAL**: Generate a Developmental Learning Plan.
-**MODE**: MENTORSHIP (Supportive, Qualitative Only).
-**INSTRUCTIONS**:
-1. **REFLECTIVE QUESTIONS**: Include a self-reflection prompt and a reference insight.
-2. **PRACTICE PLAN**: Valid, specific, and actionable exercises.
-
-**OUTPUT JSON STRUCTURE**:
-{
-  "meta": { "scenario_id": "learning", "outcome_status": "Completed", "overall_grade": "N/A", "summary": "..." },
-  "type": "learning",
-  "eq_analysis": [
-    {
-      "nuance": "Self-Reflection Tone",
-      "observation": "Evidence.",
-      "suggestion": "Adjustment."
-    }
-  ],
-  "behaviour_analysis": [
-    {
-      "behavior": "Behavior Name",
-      "quote": "Evidence quote.",
-      "insight": "Analysis.",
-      "impact": "Positive/Negative",
-      "improved_approach": "Suggestion."
-    }
-  ],
-  "detailed_analysis": [
-    {"topic": "Conversation Flow", "analysis": "Analysis content..."},
-    {"topic": "Key Patterns", "analysis": "Analysis content..."}
-  ],
-  "key_insights": ["Pattern observed...", "Strength present..."],
-  "reflective_questions": ["Question? (Insight: ...)", "Question? (Ref: ...)"],
-  "practice_plan": ["Experiment 1: Try...", "Micro-habit: When X, do Y..."],
-  "growth_outcome": "Vision of success..."
-}
-"""
-    else: # Custom
-        unified_instruction = """
-### CUSTOM SCENARIO / ROLE PLAY
-**GOAL**: Generate an Adaptive Feedback Report.
-**OUTPUT JSON STRUCTURE**:
-{
-  "meta": { "scenario_id": "custom", "outcome_status": "Success/Partial", "overall_grade": "N/A", "summary": "..." },
-  "type": "custom",
-  "eq_analysis": [
-    {
-      "nuance": "Detected Emotion",
-      "observation": "Evidence.",
-      "suggestion": "Advice."
-    }
-  ],
-  "behaviour_analysis": [
-    {
-      "behavior": "Behavior Name",
-      "quote": "Evidence quote.",
-      "insight": "Analysis.",
-      "impact": "Positive/Negative",
-      "improved_approach": "Suggestion."
-    }
-  ],
-  "detailed_analysis": [
-    {"topic": "Performance Overview", "analysis": "Analysis content..."},
-    {"topic": "Specific Observations", "analysis": "Analysis content..."}
-  ],
-  "strengths_observed": ["..."],
-  "development_opportunities": ["..."],
-  "guidance": {
-    "continue": ["..."],
-    "adjust": ["..."],
-    "try_next": ["..."]
-  }
-}
-"""
-
-    # ANALYST PERSONA (Layered on top of Scenario Logic)
-    # The 'Content' (what is measured) is determined by the Scenario (above).
-    # The 'Voice' (how it is written) is determined by the Character (below).
-    
+    # ANALYST PERSONA
     analyst_persona = ""
     if ai_character == "sarah":
         analyst_persona = """
@@ -1000,7 +577,7 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
     - **Evidence Requirement**: You MUST quote the user's exact words to support every insight. No generic praise.
     - **Tactical Advice**: Provide specific "Micro-Scripts" (e.g., "Next time say: 'I hear you...'") instead of general advice.
     """
-    else: # Default to Alex
+    else:
         analyst_persona = """
     ### ANALYST STYLE: COACH ALEX (EVALUATOR)
     - **Tone**: Professional, direct, analytical, "Bottom Line Up Front".
@@ -1013,26 +590,26 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
 
     # Unified System Prompt
     system_prompt = (
-        f"### SYSTEM ROLE\\n"
-        f"You are {ai_character.title() if ai_character else 'The AI'}, an expert Soft Skills Coach. You just facilitated a roleplay simulation.\\n"
-        f"CRITICAL: IN THE TRANSCRIPT, THE HUMAN PLAYER IS LABELED 'USER' AND PLAYED THE ROLE OF: '{role}'.\\n"
-        f"CRITICAL: YOU (THE AI) ARE LABELED 'ASSISTANT' AND PLAYED THE ROLE OF: '{ai_role}'.\\n"
-        f"YOUR EXCLUSIVE JOB IS TO EVALUATE THE HUMAN PLAYER ('USER'). DO NOT EVALUATE YOURSELF ('ASSISTANT').\\n"
-        f"Context: {scenario}\\n"
-        f"{analyst_persona}\\n"
-        f"{unified_instruction}\\n"
-        f"### GENERAL RULES\\n"
-        "1. **STRICT TRANSCRIPT GROUNDING**: You MUST base EVERY score and insight SOLELY on the words the user actually spoke in the transcript below. DO NOT hallucinate, assume, or invent interactions that did not happen.\\n"
-        "2. **VERBATIM QUOTES**: Every scorecard dimension and behavior analysis MUST contain an exact, verbatim quote from the transcript proving your point. If the user failed a dimension because they didn't do it, state: 'You did not attempt this.'\\n"
-        "3. **JUSTIFICATION**: Do not just say 'Good job'. Explain 'You scored 8/10 because you asked X question at the start...'.\\n"
-        "4. **DEPTH**: Avoid surface-level observations. Analyze subtext, tone, and strategy based on their explicit word choices.\\n"
-        "5. **EQ & NUANCE**: You MUST include the 'eq_analysis' section. Identify the user's *current emotion/tone* and provide a specific *emotional adjustment* to improve.\\n"
-        "6. **FORMAT**: OUTPUT MUST BE VALID JSON ONLY.\\n"
+        f"### SYSTEM ROLE\n"
+        f"You are {ai_character.title() if ai_character else 'The AI'}, an expert Soft Skills Coach. You just facilitated a roleplay simulation.\n"
+        f"CRITICAL: IN THE TRANSCRIPT, THE HUMAN PLAYER IS LABELED 'USER' AND PLAYED THE ROLE OF: '{role}'.\n"
+        f"CRITICAL: YOU (THE AI) ARE LABELED 'ASSISTANT' AND PLAYED THE ROLE OF: '{ai_role}'.\n"
+        f"YOUR EXCLUSIVE JOB IS TO EVALUATE THE HUMAN PLAYER ('USER'). DO NOT EVALUATE YOURSELF ('ASSISTANT').\n"
+        f"Context: {scenario}\n"
+        f"{analyst_persona}\n"
+        f"{unified_instruction}\n"
+        f"### GENERAL RULES\n"
+        "1. **STRICT TRANSCRIPT GROUNDING**: You MUST base EVERY score and insight SOLELY on the words the user actually spoke in the transcript below. DO NOT hallucinate, assume, or invent interactions that did not happen.\n"
+        "2. **VERBATIM QUOTES**: Every scorecard dimension and behavior analysis MUST contain an exact, verbatim quote from the transcript proving your point. If the user failed a dimension because they didn't do it, state: 'You did not attempt this.'\n"
+        "3. **JUSTIFICATION**: Do not just say 'Good job'. Explain 'You scored 8/10 because you asked X question at the start...'.\n"
+        "4. **DEPTH**: Avoid surface-level observations. Analyze subtext, tone, and strategy based on their explicit word choices.\n"
+        "5. **EQ & NUANCE**: You MUST include the 'eq_analysis' section. Identify the user's *current emotion/tone* and provide a specific *emotional adjustment* to improve.\n"
+        "6. **FORMAT**: OUTPUT MUST BE VALID JSON ONLY.\n"
     )
 
     try:
         # Create conversation text for analysis
-        full_conversation = "\\n".join([f"{'USER' if t['role'] == 'user' else 'ASSISTANT'}: {t['content']}" for t in transcript])
+        full_conversation = "\n".join([f"{'USER' if t['role'] == 'user' else 'ASSISTANT'}: {t['content']}" for t in transcript])
         
         # Setup LangChain Parser
         parser = JsonOutputParser()
@@ -1044,20 +621,12 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
             partial_variables={"format_instructions": parser.get_format_instructions()}
         )
         
-        # Create Chain WITHOUT parser initially - we'll handle JSON parsing manually
+        # Create Chain
         chain_raw = prompt | llm
         
-        # Invoke Chain - MAIN REPORT (Core scorecard and behavior)
         print(f" [INFO] Starting PARALLEL report generation (3 LLM calls)...", flush=True)
         
-        # ===== PARALLEL EXECUTION FOR SPEED =====
-        # Run 3 analysis functions in parallel:
-        # 1. Main report (scorecard, behavior analysis)
-        # 2. Character assessment (NEW)
-        # 3. Question analysis (NEW)
-        
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-            # Submit all 3 tasks  
             future_main = executor.submit(
                 lambda: chain_raw.invoke({
                     "system_prompt": system_prompt,
@@ -1075,29 +644,22 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
                 transcript, role, ai_role, scenario, scenario_type
             )
             
-            # Wait for all to complete
             t1 = dt.datetime.now()
             raw_response = future_main.result()
             t2 = dt.datetime.now()
             print(f" [PERF] Main Report Generation took: {(t2-t1).total_seconds():.2f}s")
             
             character_analysis = future_character.result()
-            t3 = dt.datetime.now()
-            print(f" [PERF] Character Analysis took: {(t3-t2).total_seconds():.2f}s (relative to main)")
-            
             question_analysis = future_questions.result()
-            t4 = dt.datetime.now()
-            print(f" [PERF] Question Analysis took: {(t4-t3).total_seconds():.2f}s (relative to char)")
         
         print(f" [SUCCESS] All analyses completed in parallel!", flush=True)
         
-        # === ROBUST JSON PARSING WITH CLEANUP ===
+        # Robust JSON parsing
         json_text = raw_response.content if hasattr(raw_response, 'content') else str(raw_response)
         data = parse_json_robustly(json_text)
         
         if data is None:
             print(f" [ERROR] Main report JSON parse failed. Raw response: {json_text[:1000]}...", flush=True)
-            # Final attempt: try LangChain's internal parser if our robust one failed
             try:
                 data = parser.parse(json_text)
                 print(f" [SUCCESS] LangChain parser succeeded as fallback", flush=True)
@@ -1110,31 +672,19 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         # Ensure meta exists
         if 'meta' not in data: data['meta'] = {}
         data['meta']['scenario_type'] = scenario_type
-        # Add type if missing
         if 'type' not in data: data['type'] = scenario_type
 
-        # ==== MERGE NEW ANALYSES INTO REPORT ====
+        # Merge parallel analyses
         if character_analysis:
             data['character_assessment'] = character_analysis
-        
         if question_analysis:
             data['question_analysis'] = question_analysis
 
         return data
         
     except Exception as e:
-        print(f"JSON Parse Error: {e}")
-        # Note: 'response' variable doesn't exist in this version, removing that debug line
-        return {
-            "meta": {
-                "scenario_id": scenario_type,
-                "outcome_status": "Failure", 
-                "overall_grade": "F",
-                "summary": "Error generating report. Please try again.",
-                "scenario_type": scenario_type
-            },
-            "type": scenario_type
-        }
+        print(f"Error in data analysis: {e}")
+        return {"meta": meta, "error": str(e)}
 
 
 class DashboardPDF(FPDF):
@@ -1856,6 +1406,7 @@ class DashboardPDF(FPDF):
         # Scenario-type specific colors and labels
         scenario_colors = {
             "coaching": (59, 130, 246),    # Blue
+            "coaching_sim": (59, 130, 246),
             "negotiation": (16, 185, 129), # Green  
             "reflection": (139, 92, 246),  # Purple
             "custom": (245, 158, 11),      # Orange/Amber
@@ -1866,6 +1417,7 @@ class DashboardPDF(FPDF):
         # New Labels matching frontend
         scenario_labels = {
             "coaching": "COACHING EFFICACY",
+            "coaching_sim": "COACHING EFFICACY",
             "negotiation": "NEGOTIATION POWER",
             "reflection": "LEARNING INSIGHTS",
             "custom": "GOAL ATTAINMENT",
@@ -1885,7 +1437,7 @@ class DashboardPDF(FPDF):
         self.set_font('Arial', 'B', 10)
         self.set_text_color(71, 85, 105)  # Slate 600
         icon_map = {
-            "coaching": "[C]", "negotiation": "[N]", "reflection": "[R]", "custom": "[*]",
+            "coaching": "[C]", "coaching_sim": "[C]", "negotiation": "[N]", "reflection": "[R]", "custom": "[*]",
             "leadership": "[L]", "customer_service": "[S]"
         }
         icon = icon_map.get(scenario_type, "[*]")
@@ -2079,128 +1631,7 @@ class DashboardPDF(FPDF):
 
     # --- ASSESSMENT MODE DRAWING METHODS ---
 
-    def draw_assessment_table(self, scores, show_scores=True):
-        if not scores: return
-        self.check_space(80)
-        self.ln(5)
-        
-        self.draw_section_header(self.get_title("skills"), COLORS['primary'])
 
-        # Widths
-        w_dim = 45 if show_scores else 50
-        w_score = 15
-        w_interp = 65 if show_scores else 70
-        w_tip = 65 if show_scores else 70
-        
-        # Header
-        self.set_fill_color(241, 245, 249)
-        self.set_font('Arial', 'B', 9)
-        self.set_text_color(*COLORS['text_main'])
-        self.cell(w_dim, 8, "DIMENSION", 1, 0, 'L', True)
-        if show_scores:
-            self.cell(w_score, 8, "SCORE", 1, 0, 'C', True)
-        self.cell(w_interp, 8, "INTERPRETATION", 1, 0, 'L', True)
-        self.cell(w_tip, 8, "IMPROVEMENT TIP", 1, 1, 'L', True)
-
-        for item in scores:
-            dim = sanitize_text(item.get('dimension', ''))
-            score = item.get('score', 0)
-            interp = sanitize_text(item.get('interpretation', ''))
-            tip = sanitize_text(item.get('improvement_tip', ''))
-
-            # Calculate row height based on content
-            row_height = max(15, len(interp) // 40 * 5 + 10, len(tip) // 40 * 5 + 10)
-
-            self.set_font('Arial', 'B', 9)
-            self.set_text_color(*COLORS['text_main'])
-            self.cell(w_dim, row_height, dim, 1, 0, 'L')
-            
-            if show_scores:
-                # Score Color
-                if score >= 8: self.set_text_color(*COLORS['success'])
-                elif score >= 6: self.set_text_color(*COLORS['warning'])
-                else: self.set_text_color(*COLORS['danger'])
-                
-                self.cell(w_score, row_height, f"{score}/10", 1, 0, 'C')
-            
-            # Interpretation
-            self.set_text_color(*COLORS['text_main'])
-            self.set_font('Arial', '', 8)
-            current_x = self.get_x()
-            current_y = self.get_y()
-            self.multi_cell(w_interp, 7.5, interp, border=1, align='L')
-            
-            # Improvement tip
-            self.set_xy(current_x + w_interp, current_y)
-            self.set_text_color(*COLORS['accent'])
-            self.multi_cell(w_tip, 7.5, tip, border=1, align='L')
-            
-            # Move to next row
-            self.set_xy(10, current_y + row_height)
-
-        self.ln(5)
-
-    def draw_conversation_analytics(self, analytics):
-        if not analytics: return
-        self.check_space(40)
-        
-        self.draw_section_header(self.get_title("analytics"), COLORS['secondary'])
-        
-        # Create a 2x3 grid of metrics
-        metrics = [
-            ("Total Exchanges", analytics.get('total_exchanges', 'N/A')),
-            ("Talk Time Balance", f"{analytics.get('user_talk_time_percentage', 0)}% User"),
-            ("Question/Statement Ratio", analytics.get('question_to_statement_ratio', 'N/A')),
-            ("Emotional Progression", analytics.get('emotional_tone_progression', 'N/A')),
-            ("Framework Adherence", analytics.get('framework_adherence', 'N/A')),
-        ]
-        
-        self.set_fill_color(248, 250, 252)
-        self.rect(10, self.get_y(), 190, 35, 'F')
-        
-        start_y = self.get_y()
-        for i, (label, value) in enumerate(metrics):
-            x_pos = 15 + (i % 3) * 60
-            y_pos = start_y + 5 + (i // 3) * 15
-            
-            self.set_xy(x_pos, y_pos)
-            self.set_font('Arial', 'B', 8)
-            self.set_text_color(*COLORS['text_light'])
-            self.cell(55, 5, label, 0, 1)
-            
-            self.set_xy(x_pos, y_pos + 5)
-            self.set_font('Arial', '', 9)
-            self.set_text_color(*COLORS['text_main'])
-            self.cell(55, 5, str(value), 0, 0)
-        
-        self.set_y(start_y + 40)
-
-    def draw_learning_path(self, path):
-        if not path: return
-        self.check_space(60)
-        
-        self.draw_section_header("PERSONALIZED LEARNING PATH", COLORS['accent'])
-        
-        for item in path:
-            skill = sanitize_text(item.get('skill', ''))
-            priority = item.get('priority', 'Medium')
-            timeline = sanitize_text(item.get('timeline', ''))
-            
-            # Priority color coding
-            if priority == 'High': color = COLORS['danger']
-            elif priority == 'Medium': color = COLORS['warning']
-            else: color = COLORS['success']
-            
-            self.set_font('Arial', 'B', 10)
-            self.set_text_color(*color)
-            self.cell(100, 6, f"• {skill}", 0, 0)
-            
-            self.set_font('Arial', '', 9)
-            self.set_text_color(*COLORS['text_light'])
-            self.cell(0, 6, f"Priority: {priority} | {timeline}", 0, 1)
-            self.ln(2)
-        
-        self.ln(5)
 
     def _extract_score_value(self, score_str):
         try:
@@ -2549,118 +1980,6 @@ class DashboardPDF(FPDF):
 
     # --- MAIN SCENARIO DRAWING ---
 
-    def draw_coaching_report(self, data):
-        self.draw_scorecard(data.get('scorecard', []))
-        
-        # Optional Legacy Section
-        if 'behavioral_signals' in data and not data.get('behaviour_analysis'):
-           self.draw_key_value_grid("BEHAVIORAL SIGNALS", data.get('behavioral_signals', {}))
-        
-        if 'coaching_impact' in data:
-            self.draw_key_value_grid("COACHING IMPACT", data.get('coaching_impact', {}), COLORS['purple'])
-            
-        # Use 2-Column Layout for Strengths/Weaknesses
-        self.draw_two_column_lists(
-            "KEY STRENGTHS", data.get('strengths', []), COLORS['success'],
-            "MISSED OPPORTUNITIES", data.get('missed_opportunities', []), COLORS['warning']
-        )
-            
-        self.draw_list_section("ACTIONABLE TIPS", data.get('actionable_tips', []), COLORS['accent'], "->")
-
-    def draw_coaching_sim_report(self, data):
-        # Format "scores" from dict into a list expected by draw_assessment_table or draw_scorecard
-        scores_dict = data.get('scores', {})
-        scorecard_list = []
-        for raw_key, value in scores_dict.items():
-            dim = raw_key.replace('_', ' ').title()
-            is_obj = isinstance(value, dict)
-            num_val = float(value.get('score', 0)) if is_obj else float(value)
-            reason = value.get('reasoning', '') if is_obj else ''
-            # Output out of 5 but PDF system often expects string /10 or similar
-            scorecard_list.append({
-                'dimension': dim,
-                'score': f"{num_val}/5",
-                'description': reason
-            })
-            
-        self.draw_scorecard(scorecard_list)
-        
-        self.draw_two_column_lists(
-            "KEY STRENGTHS", data.get('strengths', []), COLORS['success'],
-            "AREAS FOR IMPROVEMENT", data.get('improvements', []), COLORS['warning']
-        )
-        
-        self.draw_list_section("SUGGESTED BETTER MOVES", data.get('suggested_moves', []), COLORS['accent'], "->")
-        
-        stages = data.get('conversation_stages', [])
-        if stages:
-            self.draw_list_section("CONVERSATION STAGES COVERED", stages, COLORS['accent'], "✓")
-
-    def draw_assessment_report(self, data):
-        self.draw_scorecard(data.get('scorecard', []))
-            
-        if 'simulation_analysis' in data:
-            self.draw_key_value_grid("SIMULATION ANALYSIS", data.get('simulation_analysis', {}))
-        
-        # Use 2-Column Layout
-        self.draw_two_column_lists(
-            "WHAT WORKED", data.get('what_worked', []), COLORS['success'],
-            "LIMITATIONS", data.get('what_limited_effectiveness', []), COLORS['danger']
-        )
-        
-        if 'revenue_impact' in data:
-            self.draw_key_value_grid("REVENUE IMPACT", data.get('revenue_impact', {}), COLORS['danger'])
-            
-        self.draw_list_section("RECOMMENDATIONS", data.get('sales_recommendations', []), COLORS['accent'])
-
-    def draw_learning_report(self, data):
-        self.draw_key_value_grid("CONTEXT", data.get('context_summary', {}))
-        self.draw_list_section("KEY INSIGHTS", data.get('key_insights', []), COLORS['purple'])
-        self.draw_list_section("REFLECTIVE QUESTIONS", data.get('reflective_questions', []), COLORS['accent'], "?")
-        
-        # Behavioral Shifts
-        shifts = data.get('behavioral_shifts', [])
-        if shifts:
-            self.draw_section_header("BEHAVIORAL SHIFTS", COLORS['section_skills'])
-            for s in shifts:
-                self.set_font('Arial', '', 9)
-                self.cell(90, 6, sanitize_text(s.get('from','')), 0, 0)
-                self.cell(10, 6, "->", 0, 0)
-                self.set_font('Arial', 'B', 9)
-                self.multi_cell(0, 6, sanitize_text(s.get('to','')))
-            self.ln(5)
-
-        self.draw_list_section("PRACTICE PLAN", data.get('practice_plan', []), COLORS['success'])
-        
-        if data.get('growth_outcome'):
-            self.ln(5)
-            self.set_font('Arial', 'I', 11)
-            self.set_text_color(*COLORS['primary'])
-            self.multi_cell(0, 8, f"Growth Vision: {sanitize_text(data['growth_outcome'])}", align='C')
-
-    def draw_custom_report(self, data):
-        self.draw_key_value_grid("INTERACTION QUALITY", data.get('interaction_quality', {}))
-        
-        # Core Skills
-        skills = data.get('core_skills', [])
-        if skills:
-            self.draw_section_header("CORE SKILLS", COLORS['section_skills'])
-            for s in skills:
-                self.set_font('Arial', 'B', 9)
-                self.cell(50, 6, sanitize_text(s.get('skill', '')), 0, 0)
-                self.cell(30, 6, sanitize_text(s.get('rating', '')), 0, 0)
-                self.set_font('Arial', '', 9)
-                self.multi_cell(0, 6, sanitize_text(s.get('feedback', '')))
-        
-        self.draw_list_section("STRENGTHS", data.get('strengths_observed', []), COLORS['success'])
-        self.draw_list_section("DEVELOPMENT AREAS", data.get('development_opportunities', []), COLORS['warning'])
-        
-        # Guidance
-        guidance = data.get('guidance', {})
-        if guidance:
-            self.draw_list_section("CONTINUE", guidance.get('continue', []), COLORS['success'])
-            self.draw_list_section("ADJUST", guidance.get('adjust', []), COLORS['warning'])
-            self.draw_list_section("TRY NEXT", guidance.get('try_next', []), COLORS['accent'])
 
     def draw_coaching_sim_report(self, data):
         """
@@ -3236,187 +2555,6 @@ class DashboardPDF(FPDF):
                 self.multi_cell(180, 6, f'"{lt}"')
 
 
-    def draw_mentorship_report(self, data):
-        """
-        Renders a reflective, narrative-style mentorship report.
-        No scorecard, no scoring. Focus: insights, reflection, growth.
-        """
-        SLATE = (30, 41, 59)
-        TEAL = (20, 184, 166)
-        INDIGO = (99, 102, 241) 
-        AMBER = (245, 158, 11)
-        EMERALD = (16, 185, 129)
-        PURPLE = (168, 85, 247)
-        BLUE = (59, 130, 246)
-        LIGHT_BG = (248, 250, 252)
-        TEXT_MAIN = COLORS['text_main']
-        TEXT_LIGHT = COLORS['text_light']
-
-        def block_title(title, color):
-            self.check_space(18)
-            self.ln(6)
-            self.set_fill_color(*color)
-            self.rect(10, self.get_y(), 3, 9, 'F')
-            self.set_xy(16, self.get_y() + 1)
-            self.set_font('Arial', 'B', 11)
-            self.set_text_color(*color)
-            self.cell(0, 7, title.upper(), 0, 1)
-            self.ln(2)
-
-        def small_label(text, color=None):
-            self.set_x(12)
-            self.set_font('Arial', 'B', 8)
-            self.set_text_color(*(color or TEXT_LIGHT))
-            self.cell(0, 5, text.upper(), 0, 1)
-
-        def body_text(text):
-            self.set_x(12)
-            self.set_font('Arial', '', 9)
-            self.set_text_color(*TEXT_MAIN)
-            self.multi_cell(186, 5, sanitize_text(str(text)))
-
-        def divider():
-            self.ln(4)
-            self.set_draw_color(*COLORS['divider'])
-            self.line(10, self.get_y(), 200, self.get_y())
-            self.ln(3)
-
-        meta = data.get('meta', {})
-        summary = meta.get('summary', '')
-
-        # ─── SESSION OVERVIEW ───
-        if summary:
-            block_title("Session Overview", TEAL)
-            body_text(summary)
-            divider()
-
-        # ─── EQ & TONE OBSERVATIONS ───
-        eq = data.get('eq_analysis', [])
-        if eq:
-            block_title("Tone & Emotional Observations", AMBER)
-            for item in eq:
-                self.check_space(18)
-                nuance = sanitize_text(str(item.get('nuance', '')))
-                obs = sanitize_text(str(item.get('observation', item.get('proof', ''))))
-                suggestion = sanitize_text(str(item.get('suggestion', '')))
-
-                self.set_x(12)
-                self.set_font('Arial', 'B', 10)
-                self.set_text_color(*AMBER)
-                self.cell(0, 6, nuance, 0, 1)
-                if obs:
-                    self.set_x(14)
-                    self.set_font('Arial', 'I', 9)
-                    self.set_text_color(*TEXT_LIGHT)
-                    self.multi_cell(184, 5, f'"{obs}"')
-                if suggestion:
-                    self.set_x(14)
-                    self.set_font('Arial', '', 9)
-                    self.set_text_color(*EMERALD)
-                    self.multi_cell(184, 5, "-> " + suggestion)
-                self.ln(4)
-            divider()
-
-        # ─── BEHAVIOUR INSIGHTS ───
-        ba = data.get('behaviour_analysis', [])
-        if ba:
-            block_title("Behaviour Insights", SLATE)
-            for item in ba:
-                self.check_space(30)
-                behavior = sanitize_text(str(item.get('behavior', '')))
-                quote = sanitize_text(str(item.get('quote', '')))
-                insight = sanitize_text(str(item.get('insight', '')))
-                impact = sanitize_text(str(item.get('impact', '')))
-                improved = sanitize_text(str(item.get('improved_approach', '')))
-                impact_color = EMERALD if 'positive' in impact.lower() else (245, 101, 101)
-
-                self.set_fill_color(*LIGHT_BG)
-                self.rect(10, self.get_y(), 190, 7, 'F')
-                self.set_xy(12, self.get_y() + 1)
-                self.set_font('Arial', 'B', 10)
-                self.set_text_color(*SLATE)
-                self.cell(155, 5, behavior, 0, 0)
-                self.set_font('Arial', 'B', 8)
-                self.set_text_color(*impact_color)
-                self.cell(0, 5, impact.upper(), 0, 1)
-                self.ln(1)
-
-                if quote:
-                    self.set_x(14)
-                    self.set_font('Arial', 'I', 9)
-                    self.set_text_color(*INDIGO)
-                    self.multi_cell(184, 5, f'"{quote}"')
-                if insight:
-                    self.set_x(14)
-                    self.set_font('Arial', '', 9)
-                    self.set_text_color(*TEXT_LIGHT)
-                    self.multi_cell(184, 5, insight)
-                if improved:
-                    self.set_x(14)
-                    self.set_font('Arial', '', 9)
-                    self.set_text_color(*EMERALD)
-                    self.multi_cell(184, 5, "Try instead: " + improved)
-                self.ln(4)
-            divider()
-
-        # ─── KEY INSIGHTS ───
-        insights = data.get('key_insights', [])
-        if insights:
-            block_title("Key Insights", INDIGO)
-            for i, ins in enumerate(insights, 1):
-                self.check_space(10)
-                self.set_x(12)
-                self.set_font('Arial', 'B', 9)
-                self.set_text_color(*INDIGO)
-                self.cell(6, 5, f"{i}.", 0, 0)
-                self.set_font('Arial', '', 9)
-                self.set_text_color(*TEXT_MAIN)
-                self.multi_cell(180, 5, sanitize_text(str(ins)))
-                self.ln(2)
-            divider()
-
-        # ─── REFLECTIVE QUESTIONS ───
-        rqs = data.get('reflective_questions', [])
-        if rqs:
-            block_title("Reflective Questions", PURPLE)
-            for q in rqs:
-                self.check_space(12)
-                self.set_fill_color(245, 243, 255)
-                start_y = self.get_y()
-                self.set_x(12)
-                self.set_font('Arial', 'I', 9)
-                self.set_text_color(*PURPLE)
-                self.multi_cell(186, 6, sanitize_text(str(q)))
-                self.ln(2)
-            divider()
-
-        # ─── GROWTH OUTCOME ───
-        growth = data.get('growth_outcome', '')
-        if growth:
-            block_title("Growth Vision", EMERALD)
-            self.set_fill_color(240, 253, 244)
-            self.rect(10, self.get_y(), 190, 4, 'F')
-            self.set_x(14)
-            self.set_font('Arial', 'I', 10)
-            self.set_text_color(*SLATE)
-            self.multi_cell(184, 6, f'"{sanitize_text(str(growth))}"')
-            divider()
-
-        # ─── PRACTICE PLAN ───
-        plan = data.get('practice_plan', [])
-        if plan:
-            block_title("Practice Plan", BLUE)
-            for i, step in enumerate(plan, 1):
-                self.check_space(12)
-                self.set_x(12)
-                self.set_fill_color(*BLUE)
-                self.set_font('Arial', 'B', 9)
-                self.set_text_color(*BLUE)
-                self.cell(6, 5, f"{i}.", 0, 0)
-                self.set_font('Arial', '', 9)
-                self.set_text_color(*TEXT_MAIN)
-                self.multi_cell(181, 5, sanitize_text(str(step)))
-                self.ln(2)
 
 
 def generate_report(transcript, role, ai_role, scenario, framework=None, filename="coaching_report.pdf", mode="coaching", precomputed_data=None, scenario_type=None, user_name="Valued User", ai_character="alex"):
@@ -3470,14 +2608,8 @@ def generate_report(transcript, role, ai_role, scenario, framework=None, filenam
     stype = str(scenario_type).lower()
     
     try:
-        if 'mentorship' in stype:
-            # Mentorship: narrative, reflective, no scoring
-            pdf.draw_context_summary()
-            pdf.draw_mentorship_report(data)
-        else:
-            # ALL other scenarios (coaching_sim, coaching, sales, negotiation, custom)
-            # use the same rich 14-section SimulationView-aligned renderer
-            pdf.draw_coaching_sim_report(data)
+        # ALL scenarios now use the rich 14-section SimulationView-aligned renderer
+        pdf.draw_coaching_sim_report(data)
 
         # Transcript always appended at the end
         if transcript:

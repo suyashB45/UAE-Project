@@ -21,36 +21,6 @@ const ICON_MAP: any = {
 
 const DEFAULT_SCENARIOS = [
     {
-        name: "Skill Assessment & Practice",
-        color: "from-orange-600 to-red-500",
-        scenarios: [
-            {
-                title: "Scenario 1: Retail Coaching",
-                description: "A staff member's recent performance has dropped (sales, energy, engagement). You are the staff member receiving coaching from the manager.",
-                ai_role: "Retail Store Manager",
-                user_role: "Retail Sales Associate",
-                scenario: "CONTEXT: A staff member's recent performance has dropped (sales, energy, engagement). You (the AI) are the Retail Store Manager initiating a coaching conversation. \n\nFOCUS AREAS: Root cause analysis, empathy, and active listening. \n\nAI BEHAVIOR: You are the Retail Store Manager. The user is your staff member. You feel the staff member is burnt out. Start the conversation with empathy but be firm about the performance performance issues. Ask open questions to find the root cause.",
-                icon: "Users",
-                output_type: "scored_report",
-                mode: "evaluation",
-                scenario_type: "coaching",
-                session_mode: "skill_assessment"
-            },
-            {
-                title: "Scenario 2: Sales and Negotiation",
-                description: "A customer is interested in a high-value item but is hesitant about the price. You need to build rapport, discover their actual needs, and articulate value before offering any discounts.",
-                ai_role: "Retail Customer",
-                user_role: "Salesperson",
-                scenario: "CONTEXT: Sales and negotiation coaching for retail staff. \n\nFOCUS AREAS: Developing deeper need-based questioning and delaying price discounting until value is established. \n\nAI BEHAVIOR: Be a customer interested in a high-value item but hesitant about price. Push for a discount early. Only agree if the salesperson builds rapport, discovers your actual needs, and articulates value first.",
-                icon: "ShoppingCart",
-                output_type: "scored_report",
-                mode: "evaluation",
-                scenario_type: "negotiation",
-                session_mode: "skill_assessment"
-            }
-        ]
-    },
-    {
         name: "Coaching Simulations",
         color: "from-amber-500 to-orange-600",
         scenarios: [
@@ -59,43 +29,130 @@ const DEFAULT_SCENARIOS = [
                 description: "Coach a sincere employee who keeps missing targets. Improve performance without demotivating the employee.",
                 ai_role: "Sales Associate",
                 user_role: "Store Manager / Team Leader",
-                scenario: "CONTEXT: The employee is sincere and well-liked, but results have been consistently below target for the last 3 months. You need to coach them to understand the gap, identify root causes, and agree on a clear improvement plan.\n\nYOUR OBJECTIVES:\n1. Create a safe, respectful tone\n2. Use facts to discuss the performance gap\n3. Explore reasons behind the gap\n4. Agree on 2–3 actions and a follow-up plan",
+                scenario: "CONTEXT: Aamir is sincere and well-liked, but his results have been consistently below target for the last 3 months. You need to coach him to understand the gap, identify root causes, and agree on a clear improvement plan.\n\nYOUR OBJECTIVES:\n1. Create a safe, respectful tone\n2. Use facts to discuss the performance gap\n3. Explore reasons behind the gap\n4. Agree on 2–3 actions and a follow-up plan",
                 icon: "Users",
                 output_type: "scored_report",
                 mode: "evaluation",
                 scenario_type: "coaching_sim",
                 session_mode: "skill_assessment",
                 simulation_id: "SIM-01-PERF-001"
-            }
-        ]
-    },
-    {
-        name: "Expert Mentorship",
-        color: "from-blue-600 to-cyan-500",
-        scenarios: [
-            {
-                title: "Mentorship: Retail Coaching (Expert Demo)",
-                description: "Learn by watching an expert Manager coach a struggling employee. You play the Manager, the AI plays the struggling Employee.",
-                ai_role: "Retail Sales Associate",
-                user_role: "Retail Store Manager",
-                scenario: "CONTEXT: MENTORSHIP SESSION. The user plays the Manager. The AI plays the 'Struggling Employee'. \n\nAI BEHAVIOR: You are the Struggling Employee. Be defensive at first. Make excuses for your low performance. Only open up if the Manager (user) shows real empathy and asks the right questions.",
-                icon: "UserCog",
-                output_type: "learning_plan",
-                mode: "mentorship",
-                scenario_type: "mentorship",
-                session_mode: "mentorship"
             },
             {
-                title: "Mentorship: Low-Price Negotiation (Expert Demo)",
-                description: "Learn by watching an expert Salesperson handle a difficult customer. You play the Customer, the AI plays the expert Salesperson.",
-                ai_role: "Expert Salesperson",
-                user_role: "Retail Buyer / Customer",
-                scenario: "CONTEXT: MENTORSHIP SESSION. The user plays a difficult customer. The AI plays the 'Expert Salesperson' demonstrating value selling and objection handling. \n\nAI BEHAVIOR: VAlUE SELLING. Do not discount early. Ask questions to find needs. Pivot from price to value.",
+                title: "High Performer, Toxic Attitude",
+                description: "Coach a top performer whose behaviour is damaging team morale. Address behaviour while maintaining performance motivation.",
+                ai_role: "Senior Sales Associate",
+                user_role: "Store Manager / Team Leader",
+                scenario: "CONTEXT: Riya is one of your top performers. Her sales numbers consistently exceed target. However, multiple team members have reported that she is sarcastic, dismissive, and often undermines colleagues.\n\nYOUR OBJECTIVES:\n1. Maintain psychological safety\n2. Address behaviour clearly using examples\n3. Separate performance from behaviour\n4. Create ownership and behaviour shift commitment",
+                icon: "AlertTriangle",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "coaching_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "SIM-02-BEH-001"
+            },
+            {
+                title: "The Silent Disengagement",
+                description: "Re-engage a once-strong performer who is now doing the bare minimum. Identify root cause of disengagement and restore ownership.",
+                ai_role: "Senior Associate",
+                user_role: "Store Manager / Team Leader",
+                scenario: "CONTEXT: Arjun was one of your most dependable team members for the past year. Over the last 6–8 weeks, his energy has visibly dropped. He completes tasks but shows no initiative.\n\nYOUR OBJECTIVES:\n1. Create psychological safety\n2. Explore underlying causes without assumptions\n3. Avoid accusatory tone\n4. Help Arjun reconnect to purpose or ownership",
+                icon: "BrainCircuit",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "coaching_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "SIM-03-MOT-001"
+            },
+            {
+                title: "Pushing Back Upwards",
+                description: "Influence a senior leader demanding unrealistic targets. Push back professionally while maintaining credibility.",
+                ai_role: "Regional Director",
+                user_role: "Department Manager",
+                scenario: "CONTEXT: Your Regional Director has set a new quarterly sales target that is 35% higher than last quarter. You believe the target is unrealistic based on current market conditions.\n\nYOUR OBJECTIVES:\n1. Remain professional and composed\n2. Use data to support your position\n3. Avoid emotional or defensive tone\n4. Offer alternative solutions",
+                icon: "DollarSign",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "coaching_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "SIM-04-COM-001"
+            },
+            {
+                title: "Two Team Members, One Growing Conflict",
+                description: "Mediate tension between two colleagues blaming each other. Restore collaboration and prevent team morale damage.",
+                ai_role: "Employee A & Employee B",
+                user_role: "Team Manager",
+                scenario: "CONTEXT: Rohan and Meera have been working together on customer follow-ups. Over the last month, their communication has broken down. Each claims the other is causing delays.\n\nYOUR OBJECTIVES:\n1. Establish neutrality\n2. Prevent blame escalation\n3. Identify root cause\n4. Create a practical working agreement",
+                icon: "Swords",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "coaching_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "SIM-05-CON-001"
+            },
+            {
+                title: "The Escalating Client",
+                description: "De-escalate a frustrated client threatening contract escalation. Protect relationship without overcommitting.",
+                ai_role: "Senior Client Stakeholder",
+                user_role: "Account Manager / Team Lead",
+                scenario: "CONTEXT: A key client is frustrated about a recent delivery issue. During today’s call, they threaten to escalate to senior leadership and reconsider future business.\n\nYOUR OBJECTIVES:\n1. Stay composed under pressure\n2. Acknowledge concerns without over-admitting liability\n3. Clarify facts\n4. Offer a structured path forward",
+                icon: "ShoppingCart",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "coaching_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "SIM-06-CUST-001"
+            },
+            {
+                title: "The Overloaded Manager",
+                description: "Break the cycle of doing everything yourself. Reassign responsibility without micromanaging.",
+                ai_role: "Team Member",
+                user_role: "Senior Manager",
+                scenario: "CONTEXT: You’ve been feeling overwhelmed for months. One of your team members, Priya, is capable but rarely takes full ownership. You need to redistribute responsibility properly.\n\nYOUR OBJECTIVES:\n1. Clarify expectations\n2. Avoid blame\n3. Define ownership boundaries\n4. Establish accountability structure",
                 icon: "UserCog",
-                output_type: "learning_plan",
-                mode: "mentorship",
-                scenario_type: "mentorship",
-                session_mode: "mentorship"
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "coaching_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "SIM-07-LEAD-001"
+            },
+            {
+                title: "Resistance to the New System",
+                description: "Address subtle resistance to a recently implemented process. Shift resistance into constructive participation.",
+                ai_role: "Experienced Team Member",
+                user_role: "Manager / Team Lead",
+                scenario: "CONTEXT: Your organization has implemented a new process. While most adapt, one experienced member, Vikram, has been subtly resisting, influencing others negatively.\n\nYOUR OBJECTIVES:\n1. Avoid confrontation\n2. Understand resistance drivers\n3. Reinforce change purpose\n4. Encourage ownership in adaptation",
+                icon: "AlertTriangle",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "coaching_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "SIM-08-CHG-001"
+            },
+            {
+                title: "Why Didn't I Get Promoted?",
+                description: "Deliver growth feedback to a disappointed team member. Provide honest developmental feedback without demoralizing.",
+                ai_role: "Senior Team Member",
+                user_role: "Manager",
+                scenario: "CONTEXT: Your team member, Neha, recently applied for a promotion and was not selected. She has requested a meeting to understand why. You must provide clarity.\n\nYOUR OBJECTIVES:\n1. Acknowledge emotional impact\n2. Provide specific developmental feedback\n3. Avoid vague generalizations\n4. Offer a forward-looking growth plan",
+                icon: "GraduationCap",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "coaching_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "SIM-09-CAR-001"
+            },
+            {
+                title: "Burnout Behind the Smile",
+                description: "Support a high performer showing signs of hidden burnout. Address wellbeing without reducing accountability.",
+                ai_role: "High-performing Team Member",
+                user_role: "Manager",
+                scenario: "CONTEXT: Sana is reliable, but you’ve noticed subtle changes: she appears tired, rarely takes breaks, and has become shorter in her responses. You suspect burnout.\n\nYOUR OBJECTIVES:\n1. Observe without accusing\n2. Create psychological safety\n3. Explore wellbeing sensitively\n4. Protect sustainable performance",
+                icon: "BrainCircuit",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "coaching_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "SIM-10-WELL-001"
             }
         ]
     }
@@ -105,7 +162,7 @@ export default function Practice() {
     const navigate = useNavigate()
 
     const [selectedCharacter, setSelectedCharacter] = useState<"alex" | "sarah">("alex")
-    const [activeMode, setActiveMode] = useState<"practice" | "mentorship">("practice")
+
     const [expandedScenario, setExpandedScenario] = useState<string | null>(null)
     const [isStartingSession, setIsStartingSession] = useState(false)
     const [startingScenarioTitle, setStartingScenarioTitle] = useState<string | null>(null)
@@ -116,7 +173,7 @@ export default function Practice() {
         userRole: "",
         aiRole: "",
         context: "",
-        mode: "practice" as "practice" | "assessment" | "mentorship"
+        mode: "practice" as "practice"
     })
 
 
@@ -346,34 +403,7 @@ export default function Practice() {
                             <h3 className="text-2xl font-bold text-foreground tracking-tight">Choose Your Challenge</h3>
                         </div>
 
-                        <div className="flex justify-center mb-12">
-                            <div className="bg-card/40 p-1.5 rounded-xl border border-border flex gap-1 backdrop-blur-md">
-                                <button
-                                    onClick={() => setActiveMode("practice")}
-                                    className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all duration-300 ${activeMode === 'practice'
-                                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-900/30'
-                                        : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
-                                        }`}
-                                >
-                                    Skill Assessment
-                                </button>
-                                <button
-                                    onClick={() => setActiveMode("mentorship")}
-                                    className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all duration-300 ${activeMode === 'mentorship'
-                                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-900/30'
-                                        : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
-                                        }`}
-                                >
-                                    Mentorship Mode
-                                </button>
-                            </div>
-                        </div>
-
-                        {DEFAULT_SCENARIOS.filter(cat => {
-                            if (activeMode === 'practice') return cat.name.includes("Skill Assessment") || cat.name.includes("Coaching Simulations")
-                            if (activeMode === 'mentorship') return cat.name.includes("Mentorship")
-                            return true
-                        }).map((category, idx) => (
+                        {DEFAULT_SCENARIOS.map((category, idx) => (
                             <div key={idx} className="space-y-6">
                                 <div className="flex items-center gap-4">
                                     <div className={`h-8 w-1 bg-gradient-to-b ${category.color} rounded-full`} />
@@ -594,33 +624,7 @@ export default function Practice() {
                                         </div>
                                     </div>
 
-                                    {/* 2. Mode Selection */}
-                                    <div className="space-y-3">
-                                        <label className="text-xs font-bold uppercase text-muted-foreground ml-1">Select Mode</label>
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                            {[
-                                                { id: 'practice', label: 'Learning Mode', icon: Sparkles, desc: 'Supportive coaching & feedback' },
-                                                { id: 'assessment', label: 'Assessment', icon: AlertTriangle, desc: 'Strict evaluation, no help' },
-                                                { id: 'mentorship', label: 'Mentorship', icon: UserCog, desc: 'Watch an Expert (AI) demonstrate' }
-                                            ].map((m) => {
-                                                const ModeIcon = m.icon
-                                                return (
-                                                    <button
-                                                        key={m.id}
-                                                        onClick={() => setCustomForm({ ...customForm, mode: m.id as any })}
-                                                        className={`relative flex flex-col items-center p-4 rounded-xl border-2 transition-all duration-300 ${customForm.mode === m.id
-                                                            ? 'border-primary bg-primary/10 shadow-lg shadow-primary/10 scale-[1.02]'
-                                                            : 'border-border bg-background/30 hover:bg-background/50 hover:border-primary/50'
-                                                            }`}
-                                                    >
-                                                        <ModeIcon className={`w-6 h-6 mb-2 ${customForm.mode === m.id ? 'text-primary' : 'text-muted-foreground'}`} />
-                                                        <span className={`text-sm font-bold ${customForm.mode === m.id ? 'text-foreground' : 'text-muted-foreground'}`}>{m.label}</span>
-                                                        <span className="text-[10px] text-muted-foreground text-center mt-1 leading-tight">{m.desc}</span>
-                                                    </button>
-                                                )
-                                            })}
-                                        </div>
-                                    </div>
+
 
                                     {/* 3. Context */}
                                     <div className="space-y-2">
@@ -647,25 +651,10 @@ export default function Practice() {
                                                     return
                                                 }
 
-                                                // Map mode to backend parameters
-                                                let scenario_type = 'custom'
-                                                let session_mode = 'practice'
-                                                let mode_param = 'coaching'
-
-                                                if (customForm.mode === 'assessment') {
-                                                    scenario_type = 'coaching' // Use coaching logic for assessment but stricter
-                                                    session_mode = 'skill_assessment'
-                                                    mode_param = 'evaluation'
-                                                } else if (customForm.mode === 'mentorship') {
-                                                    scenario_type = 'mentorship'
-                                                    session_mode = 'mentorship'
-                                                    mode_param = 'mentorship'
-                                                } else {
-                                                    // Learning Mode (Practice)
-                                                    scenario_type = 'coaching'
-                                                    session_mode = 'practice'
-                                                    mode_param = 'coaching'
-                                                }
+                                                // All custom scenarios use coaching_sim
+                                                const scenario_type = 'coaching_sim'
+                                                const session_mode = 'skill_assessment'
+                                                const mode_param = 'evaluation'
 
                                                 handleStartSession({
                                                     role: customForm.userRole,
