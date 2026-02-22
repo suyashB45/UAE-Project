@@ -44,6 +44,7 @@ def setup_langchain_model():
     )
 
 llm = setup_langchain_model()
+prompt_template = PromptTemplate(template="{prompt}", input_variables=["prompt"])
 
 MODEL_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", os.getenv("MODEL_NAME", "gpt-4.1-mini"))
 
@@ -237,7 +238,24 @@ def parse_json_robustly(json_text):
     return None
 
 def detect_scenario_type(scenario: str, ai_role: str, role: str) -> str:
-    """All scenarios use the unified coaching_sim report structure."""
+    """Detect the scenario type based on keywords in scenario and roles."""
+    text = f"{scenario} {ai_role} {role}".lower()
+    
+    if any(k in text for k in ["negotiation", "bargain", "price", "deal", "contract"]):
+        return "negotiation"
+    if any(k in text for k in ["sales", "sell", "prospect", "customer", "client"]):
+        return "sales"
+    if any(k in text for k in ["leadership", "strategy", "vision", "inspire", "executive"]):
+        return "leadership"
+    if any(k in text for k in ["conflict", "dispute", "resolution", "argument", "mediation"]):
+        return "conflict_resolution"
+    if any(k in text for k in ["customer service", "complaint", "support", "help desk"]):
+        return "customer_service"
+    if any(k in text for k in ["career", "promotion", "growth", "aspiration", "mentor"]):
+        return "career_development"
+    if any(k in text for k in ["well-being", "stress", "mental health", "balance", "wellness"]):
+        return "wellness"
+        
     return "coaching_sim"
 
 
@@ -278,15 +296,15 @@ def analyze_character_traits(transcript, role, ai_role, scenario, scenario_type)
     required_traits = ["Active Listening", "Empathy", "Accountability", "Growth Mindset", "Professional Communication"]
     
     prompt = f"""
-You are analyzing a human player's CHARACTER and PERSONALITY in a {scenario_type} simulation.
+You are providing a professional assessment of a human player's character and personality fit for a {scenario_type} simulation.
 
-CRITICAL: IN THE TRANSCRIPT, THE HUMAN PLAYER IS LABELED 'USER' AND PLAYED THE ROLE OF: '{role}'.
-CRITICAL: YOU (THE AI) ARE LABELED 'ASSISTANT' AND PLAYED THE ROLE OF: '{ai_role}'.
-YOUR EXCLUSIVE JOB IS TO EVALUATE THE HUMAN PLAYER ('USER'). DO NOT EVALUATE YOURSELF.
+Note: In the transcript, the human player is labeled 'USER' (Role: '{role}').
+The AI assistant is labeled 'ASSISTANT' (Role: '{ai_role}').
+Evaluate the 'USER' based on their participation.
 
 SCENARIO: {scenario}
 
-REQUIRED TRAITS FOR SUCCESS: {', '.join(required_traits)}
+REQUIRED TRAITS: {', '.join(required_traits)}
 
 Analyze the human player's ('USER's') character based exclusively on their responses. (Note: Only the USER's lines have been provided for brevity).
 
@@ -369,11 +387,11 @@ def analyze_questions_missed(transcript, role, ai_role, scenario, scenario_type)
     questions_asked = sum(1 for msg in user_msgs if '?' in msg['content'])
     
     prompt = f"""
-You are analyzing QUESTION QUALITY in a {scenario_type} simulation.
+You are providing a professional assessment of questioning quality in a {scenario_type} simulation.
 
-CRITICAL: IN THE TRANSCRIPT, THE HUMAN PLAYER IS LABELED 'USER' AND PLAYED THE ROLE OF: '{role}'.
-CRITICAL: YOU (THE AI) ARE LABELED 'ASSISTANT' AND PLAYED THE ROLE OF: '{ai_role}'.
-YOUR EXCLUSIVE JOB IS TO EVALUATE THE HUMAN PLAYER ('USER'). DO NOT EVALUATE YOURSELF.
+Note: In the transcript, the human player is labeled 'USER' (Role: '{role}').
+The AI assistant is labeled 'ASSISTANT' (Role: '{ai_role}').
+Evaluate the 'USER' based on their questioning approach.
 
 SCENARIO: {scenario}
 
@@ -488,53 +506,68 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         "SIM-09-CAR-001": "Emotional Validation, Clarity of Developmental Feedback, Specific Behaviour Examples, Future-Focused Framing, Growth Roadmap Definition, Motivation Reinforcement",
         "SIM-10-WELL-001": "Observational Sensitivity, Psychological Safety Creation, Emotional Validation, Avoidance of Premature Solutions, Sustainable Adjustment Planning, Accountability Balance"
     }
+
+    # Scenario-type generic dimensions (fallback if no simulation_id)
+    TYPE_DIMENSIONS = {
+        "sales": "Rapport Building, Need Discovery, Objection Handling, Value Proposition, Closing Skills, Follow-up Planning",
+        "negotiation": "Interest Identification, BATNA Management, Trade-off Strategy, De-escalation, Win-Win Framing, Agreement Clarity",
+        "leadership": "Vision Setting, Empowerment Level, Strategic Alignment, Feedback Clarity, Accountability Framing, Inspiration",
+        "conflict_resolution": "Neutrality, Active Listening, Root Cause Identification, Emotional Regulation, Shared Solutioning, Resolution Clarity",
+        "customer_service": "Emotional Stability, Accountability Framing, Clarification Quality, Non-Defensive Communication, Solution Speed, Professionalism",
+        "career_development": "Aspiration Alignment, Skill Gap Identification, Narrative Building, Growth Mindset, Roadmap Clarity, Motivation Reinforcement",
+        "wellness": "Psychological Safety, Empathetic Listening, Validation Quality, Stress Source ID, Support Resource Alignment, Wellness Commitment"
+    }
     
-    # Use simulation-specific dimensions if available, otherwise fallback to universal default
-    scorecard_dimensions = SIMULATION_DIMENSIONS.get(simulation_id, "Empathy & Respect, Clarity with Facts, Coaching Questions, Ownership Creation, Action Plan Quality, Follow-up Discipline")
+    # Select dimensions: 1. Specific Simulation, 2. Scenario Type, 3. Default Coaching
+    if simulation_id and simulation_id in SIMULATION_DIMENSIONS:
+        scorecard_dimensions = SIMULATION_DIMENSIONS[simulation_id]
+    elif scenario_type in TYPE_DIMENSIONS:
+        scorecard_dimensions = TYPE_DIMENSIONS[scenario_type]
+    else:
+        scorecard_dimensions = "Empathy & Respect, Clarity with Facts, Coaching Questions, Ownership Creation, Action Plan Quality, Follow-up Discipline"
 
     unified_instruction = f"""
-### UNIFIED PERFORMANCE ANALYSIS FRAMEWORK
-**GOAL**: Evaluate the User's performance in the provided transcript using a high-premium, structured 15-section audit.
-**MODE**: EVALUATION (Scored Analysis).
-**CRITICAL RULE**: USE SIMPLE, ACCESSIBLE LANGUAGE. The reader is an everyday employee. Write in plain, encouraging English. Avoid jargon.
-**CRITICAL RULE 2**: BE CONCISE AND DIRECT. Keep reasoning, insights, and suggestions to 1-2 crisp, easy-to-read sentences. 
-**CRITICAL RULE 3**: ONLY USE THE TRANSCRIPT AND SITUATION. EVERY insight MUST be grounded in what was actually said.
+### PERFORMANCE ANALYSIS GUIDELINES
+**Objective**: Provide a professional, structured assessment of the User's performance in the provided transcript.
+**Focus**: Constructive feedback and actionable insights.
+**Language Tone**: Use encouraging, accessible, and plain English. Avoid heavy corporate jargon.
+**Evidence Requirement**: Ensure every insight or score is directly supported by interaction details from the transcript.
+**Clarity**: Keep reasoning and suggestions concise (ideally 1-2 clear sentences).
 
-**SCORECARD EXACT DIMENSIONS**: You MUST output EXACTLY 6 dimensions: {scorecard_dimensions}. Each dimension out of 10.
+**Scorecard Dimensions**: Please evaluate exactly these 6 dimensions: {scorecard_dimensions}. Rate each from 1 to 10.
 
-**OUTPUT JSON STRUCTURE**:
+**JSON Response Schema**:
 {{
-  "meta": {{ "scenario_id": "{scenario_type}", "outcome_status": "Completed/Incomplete", "overall_grade": "X/10", "summary": "Executive summary of effectiveness." }},
+  "meta": {{ "scenario_id": "{scenario_type}", "outcome_status": "Completed/Incomplete", "overall_grade": "X/10", "summary": "Brief summary of the session." }},
   "type": "unified_report",
   "executive_summary": {{
-    "snapshot": "...", "final_score": "X/10", "strengths_summary": "...", "improvements_summary": "...", "outcome_summary": "..."
+    "snapshot": "Overall performance highlight.", "final_score": "X/10", "strengths_summary": "Top strengths.", "improvements_summary": "Key growth areas.", "outcome_summary": "The ultimate result of the conversation."
   }},
   "goal_attainment": {{
-    "score": "X/10", "expectation_vs_reality": "...", "primary_gaps": ["...", "..."], "observation_focus": ["...", "..."]
+    "score": "X/10", "expectation_vs_reality": "Comparison.", "primary_gaps": ["Gap 1", "Gap 2"], "observation_focus": ["Focus 1", "Focus 2"]
   }},
   "coaching_style": {{
     "primary_style": "Directive | Supportive | Avoidant | Balanced",
-    "description": "Why this style was dominant."
+    "description": "Short explanation of the style choice."
   }},
   "deep_dive_analysis": [
-    {{"topic": "Psychological Safety", "tone": "...", "impact": "...", "analysis": "..."}},
-    {{"topic": "Strategic Communication", "tone": "...", "impact": "...", "analysis": "..."}}
+    {{"topic": "Communication Style", "tone": "Professional", "impact": "Positive", "analysis": "Detailed breakdown."}}
   ],
-  "pattern_summary": "Brief summary of dominant behavioral pattern.",
+  "pattern_summary": "A short overview of the most frequent behavior.",
   "behaviour_analysis": [
     {{
-      "behavior": "Name",
-      "quote": "Verbatim line",
-      "insight": "Psychological breakdown",
+      "behavior": "Specific Behavior",
+      "quote": "Verbatim line from transcript",
+      "insight": "Impact of this behavior",
       "impact": "Positive/Negative",
-      "improved_approach": "Alternative phrase"
+      "improved_approach": "Suggested alternative phrasing"
     }}
   ],
   "turning_points": [
-    {{"point": "Key shift in conversation", "timestamp": "Context"}}
+    {{"point": "Significant shift", "timestamp": "Context"}}
   ],
   "eq_analysis": [
-    {{ "nuance": "Emotion", "observation": "Proof", "suggestion": "Shift" }}
+    {{ "nuance": "Specific emotion/tone", "observation": "Evidence", "suggestion": "Suggested adjustment" }}
   ],
   "heat_map": [
     {{ "dimension": "First Dimension", "score": 8 }}
@@ -543,24 +576,24 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
     {{ 
       "dimension": "Dimension Name", 
       "score": "X/10", 
-      "reasoning": "...",
-      "quote": "...",
-      "suggestion": "...",
-      "alternative_questions": [{{"question": "...", "rationale": "..."}}]
+      "reasoning": "Simple explanation.",
+      "quote": "Direct quote proof.",
+      "suggestion": "How to improve this specifically.",
+      "alternative_questions": [{{"question": "Better question", "rationale": "Why it works"}}]
     }}
   ],
-  "ideal_questions": ["Missed high-impact question 1", "Missed high-impact question 2"],
+  "ideal_questions": ["High-impact question 1", "High-impact question 2"],
   "action_plan": {{
-    "specific_actions": ["..."], "owner": "User", "timeline": "Short-term", "success_indicators": ["..."]
+    "specific_actions": ["Action 1"], "owner": "User", "timeline": "Next 30 days", "success_indicators": ["Indicator 1"]
   }},
   "follow_up_strategy": {{
-    "review_cadence": "...", "metrics_to_track": ["..."], "accountability_method": "..."
+    "review_cadence": "Duration", "metrics_to_track": ["Metric 1"], "accountability_method": "Method"
   }},
   "strengths_and_improvements": {{
-    "strengths": ["...", "..."], "missed_opportunities": ["...", "..."]
+    "strengths": ["Strength 1"], "missed_opportunities": ["Opportunity 1"]
   }},
   "final_evaluation": {{
-    "readiness_level": "Level Name", "maturity_rating": "X/10", "immediate_focus": ["..."], "long_term_suggestion": "..."
+    "readiness_level": "Level", "maturity_rating": "X/10", "immediate_focus": ["Priorities"], "long_term_suggestion": "Future goal."
   }}
 }}
 """
@@ -570,41 +603,37 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
     if ai_character == "sarah":
         analyst_persona = """
     ### ANALYST STYLE: COACH SARAH (MENTOR)
-    - **Tone**: Warm, encouraging, high-EQ, "Sandwich Method" (Praise-Critique-Praise).
-    - **Focus**: Psychological safety, "growth mindset", and emotional intelligence.
-    - **Detail Level**: EXTREMELY HIGH. Write 2-3 distinct topic sections in `detailed_analysis`. Go deep into the "why" behind the user's choices.
-    - **Signature**: Use phrases like "I just loved how you...", "Consider trying...", "A small tweak could be...".
-    - **Evidence Requirement**: You MUST quote the user's exact words to support every insight. No generic praise.
-    - **Tactical Advice**: Provide specific "Micro-Scripts" (e.g., "Next time say: 'I hear you...'") instead of general advice.
+    - **Tone**: Warm, encouraging, high-EQ, "Supportive Feedback" approach.
+    - **Focus**: Psychological safety, growth mindset, and emotional intelligence.
+    - **Detail Level**: High quality analysis. Provide 2-3 distinct topic sections in `detailed_analysis`.
+    - **Signature**: Use phrases like "I appreciated how you...", "Consider trying...", "A helpful adjustment could be...".
+    - **Evidence**: Quote the user's exact words to support your insights.
+    - **Advice**: Provide specific suggestions (e.g., "Next time, try saying...") for practical growth.
     """
     else:
         analyst_persona = """
     ### ANALYST STYLE: COACH ALEX (EVALUATOR)
-    - **Tone**: Professional, direct, analytical, "Bottom Line Up Front".
-    - **Focus**: Efficiency, clear outcomes, negotiation leverage, and rapid improvement.
-    - **Detail Level**: EXTREMELY HIGH. Audit the conversation mechanism by mechanism.
-    - **Signature**: Use phrases like "The metrics show...", "You missed an opportunity to...", "To optimize, you must...".
-    - **Evidence Requirement**: Every score or critique MUST be backed by a timestamped quote from the transcript.
-    - **Tactical Advice**: Provide "High-Impact Power Moves" or specific phrasing adjustments. No fluff.
+    - **Tone**: Professional, direct, and analytical.
+    - **Focus**: Efficiency, clear outcomes, and professional impact.
+    - **Detail Level**: High logic depth. Analyze the conversation strategy.
+    - **Signature**: Use phrases like "The conversation indicates...", "There was an opportunity to...", "To optimize further...".
+    - **Evidence**: Back every score or critique with a verbatim quote from the transcript.
+    - **Tactical Advice**: Provide high-impact phrasing adjustments or strategic shifts.
     """
 
     # Unified System Prompt
     system_prompt = (
-        f"### SYSTEM ROLE\n"
-        f"You are {ai_character.title() if ai_character else 'The AI'}, an expert Soft Skills Coach. You just facilitated a roleplay simulation.\n"
-        f"CRITICAL: IN THE TRANSCRIPT, THE HUMAN PLAYER IS LABELED 'USER' AND PLAYED THE ROLE OF: '{role}'.\n"
-        f"CRITICAL: YOU (THE AI) ARE LABELED 'ASSISTANT' AND PLAYED THE ROLE OF: '{ai_role}'.\n"
-        f"YOUR EXCLUSIVE JOB IS TO EVALUATE THE HUMAN PLAYER ('USER'). DO NOT EVALUATE YOURSELF ('ASSISTANT').\n"
+        f"You are {ai_character.title() if ai_character else 'a professional coach'} providing a session assessment.\n"
+        f"In the conversation below, the human participant is 'USER' (Role: {role}) and the AI assistant is 'ASSISTANT' (Role: {ai_role}).\n"
+        f"Your task is to analyze the 'USER' based on their participation.\n"
         f"Context: {scenario}\n"
         f"{analyst_persona}\n"
         f"{unified_instruction}\n"
-        f"### GENERAL RULES\n"
-        "1. **STRICT TRANSCRIPT GROUNDING**: You MUST base EVERY score and insight SOLELY on the words the user actually spoke in the transcript below. DO NOT hallucinate, assume, or invent interactions that did not happen.\n"
-        "2. **VERBATIM QUOTES**: Every scorecard dimension and behavior analysis MUST contain an exact, verbatim quote from the transcript proving your point. If the user failed a dimension because they didn't do it, state: 'You did not attempt this.'\n"
-        "3. **JUSTIFICATION**: Do not just say 'Good job'. Explain 'You scored 8/10 because you asked X question at the start...'.\n"
-        "4. **DEPTH**: Avoid surface-level observations. Analyze subtext, tone, and strategy based on their explicit word choices.\n"
-        "5. **EQ & NUANCE**: You MUST include the 'eq_analysis' section. Identify the user's *current emotion/tone* and provide a specific *emotional adjustment* to improve.\n"
-        "6. **FORMAT**: OUTPUT MUST BE VALID JSON ONLY.\n"
+        f"Assessment Criteria:\n"
+        "1. GROUNDING: Use the transcript below as the sole source of truth.\n"
+        "2. EVIDENCE: Include short, verbatim quotes to support your findings.\n"
+        "3. DEPTH: Look for tone and subtext in the user's choices.\n"
+        "4. RESPONSE FORMAT: Provide your analysis as a single JSON object matching the requested schema.\n"
     )
 
     try:
@@ -927,17 +956,17 @@ class DashboardPDF(FPDF):
         if isinstance(analysis_data, str):
             self.check_space(60)
             self.ln(5)
-            self.draw_section_header("DETAILED ANALYSIS", COLORS['secondary'])
+            self.draw_section_header("DEEP DIVE ANALYSIS", COLORS['accent'])
             
             # Background Box
             self.set_fill_color(255, 255, 255)
             self.set_draw_color(226, 232, 240)
-            self.rect(10, self.get_y(), 190, 45, 'DF') # Fixed height fallback
+            self.rect(10, self.get_y(), 190, 45, 'DF')
             
             # Icon
             self.set_xy(15, self.get_y() + 5)
             self.set_font('Arial', 'B', 14)
-            self.set_text_color(*COLORS['secondary'])
+            self.set_text_color(*COLORS['accent'])
             self.cell(10, 10, "i", 0, 0, 'C') 
             
             # Text
@@ -952,22 +981,18 @@ class DashboardPDF(FPDF):
             return
 
         # 2. Handle New List Format (Topic-Wise)
-        # Expected: [{"topic": "Title", "analysis": "Content..."}, ...]
         if isinstance(analysis_data, list):
             self.check_space(60)
             self.ln(5)
-            self.draw_section_header("DETAILED ANALYSIS", COLORS['secondary'])
+            self.draw_section_header("DEEP DIVE ANALYSIS", COLORS['accent'])
             
             for item in analysis_data:
                 topic = sanitize_text(item.get('topic', 'Topic'))
                 content = sanitize_text(item.get('analysis', ''))
                 
                 # Estimate height
-                self.set_font('Arial', '', 10)
-                # approx 95 chars per line at 190mm width? 
-                # safely assuming 85 chars per line for wrapped text
                 num_lines = math.ceil(len(content) / 85) 
-                height = (num_lines * 5) + 15 # +15 for padding/header
+                height = (num_lines * 5) + 15
                 
                 self.check_space(height)
                 
@@ -980,177 +1005,7 @@ class DashboardPDF(FPDF):
                 self.set_font('Arial', '', 10)
                 self.set_text_color(*COLORS['text_main'])
                 self.multi_cell(190, 5, content)
-                self.ln(4) # Spacing between topics
-
-    def draw_dynamic_questions(self, questions):
-        """Draw the dynamic follow-up questions section."""
-        if not questions: return
-        
-        self.check_space(60)
-        self.ln(5)
-        
-        self.draw_section_header("DEEP DIVE QUESTIONS", COLORS['accent'])
-        
-        # Grid Background - Purple/Indigo theme
-        self.set_fill_color(248, 250, 252) # Very light slate
-        start_y = self.get_y()
-        # Estimate height based on questions
-        height = 15 + (len(questions) * 12)
-        self.rect(10, start_y, 190, height, 'F')
-        
-        current_y = start_y + 5
-        
-        for i, q in enumerate(questions):
-            self.set_xy(15, current_y)
-            self.set_font('Arial', 'B', 12)
-            self.set_text_color(*COLORS['accent'])
-            self.cell(10, 8, "?", 0, 0, 'C')
-            
-            self.set_font('Arial', 'I', 10) # Italic for questions
-            self.set_text_color(*COLORS['text_main'])
-            self.multi_cell(160, 6, sanitize_text(q))
-            
-            # Update Y for next question, assuming single line or double line
-            # Simple heuristic: add fixed spacing
-            current_y = self.get_y() + 4
-            
-        self.set_y(start_y + height + 5)
-
-    def draw_behaviour_analysis(self, analysis_data):
-        """Draw the detailed Behaviour Analysis section."""
-        if not analysis_data: return
-
-        self.check_space(80)
-        self.ln(5)
-        self.draw_section_header("BEHAVIOURAL ANALYSIS", COLORS['primary'])
-
-        for item in analysis_data:
-            behavior = sanitize_text(item.get('behavior', 'Behavior'))
-            quote = sanitize_text(item.get('quote', ''))
-            insight = sanitize_text(item.get('insight', ''))
-            impact = sanitize_text(item.get('impact', 'Neutral'))
-            improved = sanitize_text(item.get('improved_approach', ''))
-
-            # Determine color based on impact
-            impact_color = COLORS['secondary']
-            if 'positive' in impact.lower(): impact_color = COLORS['success']
-            elif 'negative' in impact.lower(): impact_color = COLORS['danger']
-            
-            # Estimate height conservatively
-            height = 15 # Base height
-            if quote: height += int(len(quote) / 75 + 1) * 5 + 5
-            if insight: height += int(len(insight) / 75 + 1) * 5 + 5
-            if improved: height += int(len(improved) / 75 + 1) * 5 + 12
-            
-            self.check_space(height + 10)
-            
-            start_y = self.get_y()
-            
-            # Left Bar (Impact Color)
-            self.set_fill_color(*impact_color)
-            self.rect(10, start_y, 2, height, 'F')
-            
-            # Background
-            self.set_fill_color(248, 250, 252)
-            self.rect(12, start_y, 188, height, 'F')
-            
-            current_y = start_y + 3
-            
-            # Header: Behavior + Impact
-            self.set_xy(15, current_y)
-            self.set_font('Arial', 'B', 10)
-            self.set_text_color(*COLORS['text_main'])
-            self.cell(100, 6, behavior.upper(), 0, 0)
-            
-            self.set_font('Arial', 'B', 8)
-            self.set_text_color(*impact_color)
-            self.cell(80, 6, impact.upper(), 0, 1, 'R')
-            
-            current_y += 8
-            
-            # Quote (Proof)
-            if quote:
-                self.set_xy(15, current_y)
-                self.set_font('Arial', 'BI', 9) # Bold Italic
-                self.set_text_color(80, 80, 80)
-                self.multi_cell(180, 5, f'"{quote}"')
-                current_y = self.get_y() + 2
-                
-            # Insight (Analysis)
-            if insight:
-                self.set_xy(15, current_y)
-                self.set_font('Arial', '', 9)
-                self.set_text_color(*COLORS['text_main'])
-                self.multi_cell(180, 5, insight, align='J')
-                current_y = self.get_y() + 4
-                
-            # Improved Approach (Actionable Advice)
-            if improved:
-                self.set_xy(15, current_y)
-                self.set_font('Arial', 'B', 9)
-                self.set_text_color(*COLORS['accent'])
-                self.cell(40, 5, "TRY THIS INSTEAD:", 0, 1) # Force new line
-                
-                # Draw a highlight box for the correction
-                correction_y = self.get_y()
-                self.set_fill_color(240, 249, 255) # Light blue bg
-                # Calculate height safely
-                lines = int(len(improved) / 75) + 1
-                box_h = lines * 5 + 5
-                self.rect(15, correction_y, 180, box_h, 'F')
-                
-                self.set_xy(17, correction_y + 2) # Indent slightly inside box
-                self.set_font('Arial', 'I', 9)
-                self.set_text_color(*COLORS['text_main'])
-                self.multi_cell(175, 5, improved, align='J')
-                current_y = self.get_y() + 4
-
-            # Bottom Spacer (safely preventing overlap)
-            self.set_y(max(self.get_y(), start_y + height) + 4)
-
-    def draw_detailed_analysis(self, items):
-        """Draw the Deep Dive Analysis section."""
-        if not items: return
-        
-        self.check_space(60)
-        self.ln(5)
-        self.draw_section_header("DEEP DIVE ANALYSIS", COLORS['accent'])
-        
-        if isinstance(items, list):
-            for item in items:
-                topic = sanitize_text(item.get('topic', ''))
-                analysis = sanitize_text(item.get('analysis', ''))
-                
-                if not topic and not analysis: continue
-                
-                # Estimate height
-                height = 15
-                if analysis: height += len(analysis) // 90 * 5
-                
-                self.check_space(height + 10)
-                
-                # Topic Header
-                self.set_font('Arial', 'B', 10)
-                self.set_text_color(*COLORS['accent'])
-                self.cell(0, 6, topic.upper(), 0, 1)
-                
-                # Left border for analysis content
-                start_y = self.get_y()
-                self.set_fill_color(*COLORS['accent'])
-                self.rect(10, start_y, 1, height - 5, 'F')
-                
-                # Analysis Text
-                self.set_xy(15, start_y)
-                self.set_font('Arial', '', 9)
-                self.set_text_color(*COLORS['text_main'])
-                self.multi_cell(180, 5, analysis)
                 self.ln(4)
-        elif isinstance(items, str):
-            # If it's a raw string instead of an array
-            self.set_font('Arial', '', 9)
-            self.set_text_color(*COLORS['text_main'])
-            self.multi_cell(0, 5, sanitize_text(items))
-            self.ln(4)
 
     def draw_question_analysis(self, analysis):
         """Draw the Questions You Should Have Asked section."""
@@ -2116,7 +1971,28 @@ class DashboardPDF(FPDF):
             divider()
 
         # ─────────────────────────────────────────────────────────────
-        # 4. COMPETENCY HEAT MAP
+        # 4. SCENARIO CONTEXT
+        # ─────────────────────────────────────────────────────────────
+        if data.get('meta', {}).get('scenario'):
+            self.draw_context_summary()
+            divider()
+
+        # ─────────────────────────────────────────────────────────────
+        # 5. QUESTIONING ANALYSIS
+        # ─────────────────────────────────────────────────────────────
+        if data.get('question_analysis'):
+            self.draw_question_analysis(data.get('question_analysis'))
+            divider()
+
+        # ─────────────────────────────────────────────────────────────
+        # 6. DETAILED ANALYSIS
+        # ─────────────────────────────────────────────────────────────
+        if data.get('detailed_analysis'):
+            self.draw_detailed_analysis(data.get('detailed_analysis'))
+            divider()
+
+        # ─────────────────────────────────────────────────────────────
+        # 7. COMPETENCY HEAT MAP
         # ─────────────────────────────────────────────────────────────
         heat_map = data.get('heat_map', [])
         if heat_map:
@@ -2149,7 +2025,7 @@ class DashboardPDF(FPDF):
             divider()
 
         # ─────────────────────────────────────────────────────────────
-        # 5. SCORECARD
+        # 8. SCORECARD
         # ─────────────────────────────────────────────────────────────
         scorecard = data.get('scorecard', [])
         if scorecard:
@@ -2198,7 +2074,7 @@ class DashboardPDF(FPDF):
                 self.ln(2)
 
         # ─────────────────────────────────────────────────────────────
-        # 6. DEEP DIVE ANALYSIS
+        # 9. DEEP DIVE ANALYSIS
         # ─────────────────────────────────────────────────────────────
         dda = data.get('deep_dive_analysis', [])
         if dda:
@@ -2230,7 +2106,7 @@ class DashboardPDF(FPDF):
             divider()
 
         # ─────────────────────────────────────────────────────────────
-        # 7. BEHAVIOURAL PATTERN SUMMARY
+        # 10. BEHAVIOURAL PATTERN SUMMARY
         # ─────────────────────────────────────────────────────────────
         ps = data.get('pattern_summary', '')
         if ps:
@@ -2242,7 +2118,7 @@ class DashboardPDF(FPDF):
             divider()
 
         # ─────────────────────────────────────────────────────────────
-        # 8. EQ ANALYSIS
+        # 11. EQ ANALYSIS
         # ─────────────────────────────────────────────────────────────
         eq = data.get('eq_analysis', [])
         if eq:
@@ -2271,7 +2147,7 @@ class DashboardPDF(FPDF):
             divider()
 
         # ─────────────────────────────────────────────────────────────
-        # 9. TURNING POINTS
+        # 12. TURNING POINTS
         # ─────────────────────────────────────────────────────────────
         tp_list = data.get('turning_points', [])
         if tp_list:
@@ -2293,7 +2169,7 @@ class DashboardPDF(FPDF):
             divider()
 
         # ─────────────────────────────────────────────────────────────
-        # 10. BEHAVIOUR ANALYSIS
+        # 13. BEHAVIOUR ANALYSIS
         # ─────────────────────────────────────────────────────────────
         ba = data.get('behaviour_analysis', [])
         if ba:
@@ -2337,7 +2213,7 @@ class DashboardPDF(FPDF):
             divider()
 
         # ─────────────────────────────────────────────────────────────
-        # 11. STRENGTHS & MISSED OPPORTUNITIES (dual column)
+        # 14. STRENGTHS & MISSED OPPORTUNITIES (dual column)
         # ─────────────────────────────────────────────────────────────
         si = data.get('strengths_and_improvements', {})
         strengths_list = si.get('strengths', []) if si else data.get('strengths', [])
@@ -2398,6 +2274,9 @@ class DashboardPDF(FPDF):
             self.set_y(max(left_y, right_y) + 2)
             divider()
 
+        # ─────────────────────────────────────────────────────────────
+        # 15. IDEAL COACHING QUESTIONS
+        # ─────────────────────────────────────────────────────────────
         if ideal_qs:
             block_title("Ideal Coaching Questions", INDIGO)
             for q in ideal_qs:
@@ -2410,7 +2289,7 @@ class DashboardPDF(FPDF):
             divider()
 
         # ─────────────────────────────────────────────────────────────
-        # 12. ACTION PLAN
+        # 16. ACTION PLAN
         # ─────────────────────────────────────────────────────────────
         ap = data.get('action_plan', {})
         if ap:
@@ -2466,7 +2345,7 @@ class DashboardPDF(FPDF):
             divider()
 
         # ─────────────────────────────────────────────────────────────
-        # 13. FOLLOW-UP STRATEGY
+        # 17. FOLLOW-UP STRATEGY
         # ─────────────────────────────────────────────────────────────
         fus = data.get('follow_up_strategy', {})
         if fus:
@@ -2499,7 +2378,7 @@ class DashboardPDF(FPDF):
             divider()
 
         # ─────────────────────────────────────────────────────────────
-        # 14. FINAL EVALUATION
+        # 18. FINAL EVALUATION
         # ─────────────────────────────────────────────────────────────
         fe = data.get('final_evaluation', {})
         if fe:
@@ -2555,9 +2434,7 @@ class DashboardPDF(FPDF):
                 self.multi_cell(180, 6, f'"{lt}"')
 
 
-
-
-def generate_report(transcript, role, ai_role, scenario, framework=None, filename="coaching_report.pdf", mode="coaching", precomputed_data=None, scenario_type=None, user_name="Valued User", ai_character="alex"):
+def generate_report(transcript, role, ai_role, scenario, framework=None, filename="coaching_report.pdf", mode="coaching", precomputed_data=None, scenario_type=None, user_name="{user_name}", ai_character="alex"):
 
 
     """

@@ -342,12 +342,6 @@ export default function Report() {
                     </div>
                 </motion.div>
 
-                {/* SCENARIO CONTEXT (Added to sync with PDF) */}
-                {data.meta.scenario && (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                        <ScenarioContextSection scenario={data.meta.scenario} />
-                    </motion.div>
-                )}
 
                 <motion.div variants={containerVars} initial="hidden" animate="show">
                     {renderContent()}
