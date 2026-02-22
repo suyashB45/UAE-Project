@@ -1136,8 +1136,10 @@ def complete_session(session_id: str):
             )
             sess["report_data"] = data
         except Exception as e:
-            print(f"Error generating data: {e}")
-            return jsonify({"error": str(e)}), 500
+            import traceback
+            traceback.print_exc()
+            print(f" [ERROR] Data generation failed for {session_id}: {e}")
+            return jsonify({"error": f"Report data analysis failed: {str(e)}"}), 500
     
     # Fetch user name for report personalization
     user_name = "Valued User"
@@ -1239,7 +1241,11 @@ def view_report(session_id: str):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        print(f" [ERROR] PDF generation failed for {session_id}: {e}")
+        return jsonify({
+            "error": "Failed to generate PDF report",
+            "details": str(e)
+        }), 500
 
 @app.get("/api/session/<session_id>/report_data")
 def get_report_data(session_id: str):
@@ -1323,8 +1329,13 @@ def get_report_data(session_id: str):
         response["ai_character"] = sess.get("ai_character", "alex")
         return jsonify(response)
     except Exception as e:
-        print(f"Error generating report data: {e}")
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        print(f" [ERROR] Parallel report data generation failed for {session_id}: {e}")
+        return jsonify({
+            "error": "Failed to analyze session data",
+            "details": str(e)
+        }), 500
 
 @app.get("/api/sessions")
 def get_sessions():
