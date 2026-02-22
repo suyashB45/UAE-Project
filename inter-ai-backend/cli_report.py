@@ -25,7 +25,7 @@ USE_AZURE = True
 # ... imports ... 
 def setup_langchain_model():
     # Force httpx to ignore system proxies which cause hangs on Azure VMs
-    http_client = httpx.Client(trust_env=False, timeout=30.0)
+    http_client = httpx.Client(trust_env=False, timeout=120.0)
     
     if USE_AZURE:
         return AzureChatOpenAI(
@@ -179,6 +179,63 @@ def llm_reply(messages, max_tokens=4000):
         print(f"LLM Error: {e}")
         return "{}"
 
+def parse_json_robustly(json_text):
+    """
+    Robustly parse JSON from LLM responses, handling markdown blocks and common errors.
+    """
+    if not json_text:
+        return None
+        
+    # Clean up whitespace
+    json_text = json_text.strip()
+    
+    try:
+        # 1. Try direct parsing first
+        return json.loads(json_text)
+    except json.JSONDecodeError:
+        pass
+        
+    # 2. Try to extract JSON from markdown code blocks (```json ... ```)
+    markdown_match = re.search(r'```(?:json)?\s*(.*?)\s*```', json_text, re.DOTALL)
+    if markdown_match:
+        content = markdown_match.group(1).strip()
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            # Try to fix escaped quotes in this block
+            try:
+                fixed = re.sub(r':\s*\\+"([^"]*)\\+"', r': "\1"', content)
+                return json.loads(fixed)
+            except json.JSONDecodeError:
+                pass
+            
+    # 3. Try to find anything between the first { and the last }
+    json_match = re.search(r'(\{.*\})', json_text, re.DOTALL)
+    if json_match:
+        content = json_match.group(1).strip()
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            # Try to fix escaped quotes in this block
+            try:
+                fixed = re.sub(r':\s*\\+"([^"]*)\\+"', r': "\1"', content)
+                return json.loads(fixed)
+            except json.JSONDecodeError:
+                pass
+            
+    # 4. Handle escaped quotes on the whole text if nothing else worked
+    try:
+        fixed = re.sub(r':\s*\\+"([^"]*)\\+"', r': "\1"', json_text)
+        # Try finding JSON again in the fixed text
+        retry_match = re.search(r'(\{.*\})', fixed, re.DOTALL)
+        if retry_match:
+            return json.loads(retry_match.group(1))
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        pass
+
+    return None
+
 def detect_scenario_type(scenario: str, ai_role: str, role: str) -> str:
     """Detect scenario type based on content to determine report structure."""
     scenario_lower = scenario.lower()
@@ -310,15 +367,17 @@ Be SPECIFIC. Quote EXACT words. No generic advice.
 """
     
     try:
-        parser = JsonOutputParser()
-        prompt_template = PromptTemplate(
-            template="{prompt}\n\n{format_instructions}",
-            input_variables=["prompt"],
-            partial_variables={"format_instructions": parser.get_format_instructions()}
-        )
+        chain = prompt_template | llm
+        response = chain.invoke({"prompt": prompt})
         
-        chain = prompt_template | llm | parser
-        result = chain.invoke({"prompt": prompt})
+        # Robust parsing
+        json_text = response.content if hasattr(response, 'content') else str(response)
+        result = parse_json_robustly(json_text)
+        
+        if result is None:
+            print(f" [ERROR] Character analysis JSON parse failed. Raw response: {json_text[:500]}...")
+            raise ValueError("Invalid JSON format from LLM")
+            
         print(" [SUCCESS] Character analysis completed")
         return result
         
@@ -400,15 +459,17 @@ Categorize each question and specify optimal timing in the conversation.
 """
     
     try:
-        parser = JsonOutputParser()
-        prompt_template = PromptTemplate(
-            template="{prompt}\n\n{format_instructions}",
-            input_variables=["prompt"],
-            partial_variables={"format_instructions": parser.get_format_instructions()}
-        )
+        chain = prompt_template | llm
+        response = chain.invoke({"prompt": prompt})
         
-        chain = prompt_template | llm | parser
-        result = chain.invoke({"prompt": prompt})
+        # Robust parsing
+        json_text = response.content if hasattr(response, 'content') else str(response)
+        result = parse_json_robustly(json_text)
+        
+        if result is None:
+            print(f" [ERROR] Question analysis JSON parse failed. Raw response: {json_text[:500]}...")
+            raise ValueError("Invalid JSON format from LLM")
+            
         print(" [SUCCESS] Question analysis completed")
         return result
         
@@ -1031,41 +1092,20 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         print(f" [SUCCESS] All analyses completed in parallel!", flush=True)
         
         # === ROBUST JSON PARSING WITH CLEANUP ===
-        try:
-            # Extract text content from LLM response
-            if hasattr(raw_response, 'content'):
-                json_text = raw_response.content
-            else:
-                json_text = str(raw_response)
-            
-            # Log first 500 chars for debugging
-            print(f" [DEBUG] Raw LLM response (first 500 chars): {json_text[:500]}", flush=True)
-            
-            # Clean up common JSON formatting issues:
-            # 1. Remove markdown code fences (```json ... ```)
-            json_text = re.sub(r'^```(?:json)?\\s*', '', json_text.strip())
-            json_text = re.sub(r'```\\s*$', '', json_text.strip())
-            
-            # 2. Fix escaped quotes at start/end of string values: "key": \\"value\\" -> "key": "value"
-            # This is the main issue causing the parse error
-            json_text = re.sub(r':\\s*\\\\"([^"]*)\\\\"', r': "\\1"', json_text)
-            
-            # 3. Parse the cleaned JSON
-            data = json.loads(json_text)
-            print(f" [SUCCESS] JSON parsed successfully after cleanup", flush=True)
-            
-        except json.JSONDecodeError as je:
-            print(f" [ERROR] JSON Parse Error after cleanup: {je}", flush=True)
-            print(f" [ERROR] Problematic JSON (first 1000 chars): {json_text[:1000]}", flush=True)
-            
-            # Last resort: try LangChain's parser
+        json_text = raw_response.content if hasattr(raw_response, 'content') else str(raw_response)
+        data = parse_json_robustly(json_text)
+        
+        if data is None:
+            print(f" [ERROR] Main report JSON parse failed. Raw response: {json_text[:1000]}...", flush=True)
+            # Final attempt: try LangChain's internal parser if our robust one failed
             try:
                 data = parser.parse(json_text)
                 print(f" [SUCCESS] LangChain parser succeeded as fallback", flush=True)
             except Exception as parser_error:
                 print(f" [ERROR] LangChain parser also failed: {parser_error}", flush=True)
-                # Re-raise original error with more context
-                raise je
+                raise ValueError("Could not parse JSON from main report response")
+        else:
+            print(f" [SUCCESS] Main report JSON parsed successfully", flush=True)
         
         # Ensure meta exists
         if 'meta' not in data: data['meta'] = {}
