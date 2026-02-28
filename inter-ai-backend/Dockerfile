@@ -38,5 +38,6 @@ ENV FLASK_ENV=production
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/api/health || exit 1
 
-# Run the application
-CMD ["python", "app.py"]
+# Run the application with Gunicorn for production performance
+# 4 workers allows it to handle multiple concurrent requests without blocking
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--threads", "2", "--timeout", "120", "app:app"]

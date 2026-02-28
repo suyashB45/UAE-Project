@@ -19,4 +19,4 @@ bcrypt
 flask-bcrypt
 langchain
 langchain-openai
-gunicorn; sys_platform != 'win32'
+gunicorn

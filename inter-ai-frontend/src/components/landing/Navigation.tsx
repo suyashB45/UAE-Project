@@ -17,9 +17,17 @@ const Navigation = () => {
     // Check auth state
     useEffect(() => {
         const checkAuth = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            setUser(session?.user ?? null);
-            setLoading(false);
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                if (error) {
+                    console.error("Auth session error:", error);
+                }
+                setUser(session?.user ?? null);
+            } catch (err) {
+                console.error("Failed to get session:", err);
+            } finally {
+                setLoading(false);
+            }
         };
 
         checkAuth();
@@ -244,7 +252,15 @@ const Navigation = () => {
                                             </>
                                         ) : (
                                             <>
-
+                                                <button
+                                                    onClick={() => {
+                                                        navigate('/login');
+                                                        setIsMobileMenuOpen(false);
+                                                    }}
+                                                    className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl font-medium text-white bg-primary hover:bg-primary/90 transition-colors"
+                                                >
+                                                    Sign In
+                                                </button>
                                             </>
                                         )}
                                     </div>
