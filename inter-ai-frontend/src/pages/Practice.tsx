@@ -158,6 +158,24 @@ const DEFAULT_SCENARIOS = [
     }
 ]
 
+// Derived Mentorship category: flip roles from the primary coaching scenarios
+const MENTORSHIP_CATEGORY = {
+    name: "Mentorship Examples",
+    color: "from-emerald-400 to-emerald-600",
+    scenarios: DEFAULT_SCENARIOS[0].scenarios.map((s: any) => ({
+        ...s,
+        title: `${s.title} — Mentorship`,
+        // Flip roles
+        user_role: s.ai_role,
+        ai_role: s.user_role,
+        // Mark as mentorship so UI and backend can handle differently
+        scenario_type: "mentorship",
+        session_mode: "mentorship",
+        mode: "mentorship"
+    }))
+}
+
+
 export default function Practice() {
     const navigate = useNavigate()
 
@@ -173,8 +191,11 @@ export default function Practice() {
         userRole: "",
         aiRole: "",
         context: "",
-        mode: "practice" as "practice"
+        mode: "practice" as "practice",
+        sessionType: "assessment" as "assessment" | "mentorship"
     })
+
+    const [globalMode, setGlobalMode] = useState<"assessment" | "mentorship">("assessment")
 
 
     // Helper function to parse scenario text
@@ -212,6 +233,7 @@ export default function Practice() {
         title?: string
         mode?: string
         simulation_id?: string
+        flip_roles?: boolean
     }) => {
         if (isStartingSession) return
 
@@ -231,7 +253,8 @@ export default function Practice() {
                     ai_character: data.ai_character || selectedCharacter,
                     title: data.title,
                     mode: data.mode,
-                    simulation_id: data.simulation_id
+                    simulation_id: data.simulation_id,
+                    flip_roles: data.flip_roles || false
                 })
             })
 
@@ -400,10 +423,32 @@ export default function Practice() {
                             <div className="bg-background px-4 relative z-10 mb-8">
                                 <span className="text-xs font-black text-indigo-500 tracking-[0.2em] uppercase border border-indigo-900/50 bg-indigo-900/20 px-3 py-1 rounded-full">Step 02</span>
                             </div>
-                            <h3 className="text-2xl font-bold text-foreground tracking-tight">Choose Your Challenge</h3>
+                            <h3 className="text-2xl font-bold text-foreground tracking-tight mb-6">Choose Your Challenge</h3>
+
+                            {/* Global Mode Toggle */}
+                            <div className="flex bg-card/60 border border-border/50 rounded-full p-1.5 shadow-xl backdrop-blur-md mb-8">
+                                <button
+                                    onClick={() => setGlobalMode("assessment")}
+                                    className={`relative px-8 py-3 rounded-full text-sm font-bold transition-all duration-300 ${globalMode === "assessment"
+                                        ? "text-primary bg-primary/10 shadow-[0_2px_10px_rgba(59,130,246,0.15)]"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                                        }`}
+                                >
+                                    Assessment
+                                </button>
+                                <button
+                                    onClick={() => setGlobalMode("mentorship")}
+                                    className={`relative px-8 py-3 rounded-full text-sm font-bold transition-all duration-300 ${globalMode === "mentorship"
+                                        ? "text-emerald-500 bg-emerald-500/10 shadow-[0_2px_10px_rgba(16,185,129,0.15)]"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                                        }`}
+                                >
+                                    Mentorship
+                                </button>
+                            </div>
                         </div>
 
-                        {DEFAULT_SCENARIOS.map((category, idx) => (
+                        {(globalMode === "assessment" ? DEFAULT_SCENARIOS : [MENTORSHIP_CATEGORY]).map((category, idx) => (
                             <div key={idx} className="space-y-6">
                                 <div className="flex items-center gap-4">
                                     <div className={`h-8 w-1 bg-gradient-to-b ${category.color} rounded-full`} />
@@ -465,7 +510,9 @@ export default function Practice() {
                                                     ai_character: selectedCharacter,
                                                     title: scenario.title,
                                                     mode: scenario.mode,
-                                                    simulation_id: scenario.simulation_id
+                                                    simulation_id: scenario.simulation_id,
+                                                    // Flip roles flag for mentorship scenarios so backend can swap if needed
+                                                    flip_roles: scenario.scenario_type === 'mentorship'
                                                 })}
                                                 className={`group relative p-6 bg-card/40 hover:bg-card/60 border border-border/50 hover:border-primary/30 rounded-2xl transition-all duration-300 cursor-pointer overflow-hidden ${isStartingSession ? 'opacity-70 pointer-events-none' : ''}`}
                                             >
@@ -562,7 +609,29 @@ export default function Practice() {
                                     <span className="text-xs font-black text-amber-500 tracking-[0.2em] uppercase border border-amber-500/30 bg-amber-500/10 px-4 py-1.5 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.2)]">Create Your Own</span>
                                 </div>
                                 <h3 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight mb-2">Build a Scenario</h3>
-                                <p className="text-muted-foreground text-center max-w-lg">Design a specific situation to test your skills or explore a new dynamic.</p>
+                                <p className="text-muted-foreground text-center max-w-lg mb-8">Design a specific situation to test your skills or explore a new dynamic.</p>
+
+                                {/* Custom Mode Toggle */}
+                                <div className="flex bg-card/60 border border-border/50 rounded-full p-1.5 shadow-xl backdrop-blur-md">
+                                    <button
+                                        onClick={() => setCustomForm({ ...customForm, sessionType: "assessment" })}
+                                        className={`relative px-8 py-3 rounded-full text-sm font-bold transition-all duration-300 ${customForm.sessionType === "assessment"
+                                            ? "text-primary bg-primary/10 shadow-[0_2px_10px_rgba(59,130,246,0.15)]"
+                                            : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                                            }`}
+                                    >
+                                        Assessment
+                                    </button>
+                                    <button
+                                        onClick={() => setCustomForm({ ...customForm, sessionType: "mentorship" })}
+                                        className={`relative px-8 py-3 rounded-full text-sm font-bold transition-all duration-300 ${customForm.sessionType === "mentorship"
+                                            ? "text-emerald-500 bg-emerald-500/10 shadow-[0_2px_10px_rgba(16,185,129,0.15)]"
+                                            : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                                            }`}
+                                    >
+                                        Mentorship
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="bg-card/40 border border-white/10 rounded-3xl p-6 sm:p-10 backdrop-blur-md shadow-2xl relative overflow-hidden">
@@ -651,10 +720,11 @@ export default function Practice() {
                                                     return
                                                 }
 
-                                                // All custom scenarios use coaching_sim
-                                                const scenario_type = 'coaching_sim'
-                                                const session_mode = 'skill_assessment'
-                                                const mode_param = 'evaluation'
+                                                // Dynamic mode based on toggle
+                                                const scenario_type = customForm.sessionType === 'mentorship' ? 'mentorship' : 'coaching_sim'
+                                                const session_mode = customForm.sessionType === 'mentorship' ? 'mentorship' : 'skill_assessment'
+                                                const mode_param = customForm.sessionType === 'mentorship' ? 'mentorship' : 'evaluation'
+                                                const flip_roles = customForm.sessionType === 'mentorship'
 
                                                 handleStartSession({
                                                     role: customForm.userRole,
@@ -664,7 +734,8 @@ export default function Practice() {
                                                     scenario_type: scenario_type,
                                                     session_mode: session_mode,
                                                     ai_character: selectedCharacter,
-                                                    mode: mode_param
+                                                    mode: mode_param,
+                                                    flip_roles: flip_roles
                                                 })
                                             }}
                                             disabled={isStartingSession}

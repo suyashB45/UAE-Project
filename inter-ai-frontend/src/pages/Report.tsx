@@ -297,15 +297,22 @@ export default function Report() {
                                             {new Date().toLocaleDateString()}
                                         </span>
                                     </div>
-                                    <h1 className="text-4xl md:text-5xl font-black text-foreground mb-2">Session Analysis</h1>
+                                    <h1 className="text-4xl md:text-5xl font-black text-foreground mb-2">
+                                        {data.meta.session_mode === 'mentorship' ? 'Mentorship Feedback' : 'Session Analysis'}
+                                    </h1>
                                     <p className="text-xl text-muted-foreground">{data.meta.summary}</p>
                                 </div>
                             </div>
                         </div>
                         <div className="flex flex-col items-end gap-4 min-w-[200px]">
                             <div className="text-right">
-                                <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-1">Overall Grade</div>
-                                <div className={`text-7xl font-black text-transparent bg-clip-text bg-gradient-to-br from-blue-400 to-indigo-500 leading-none`}>
+                                <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-1">
+                                    {data.meta.session_mode === 'mentorship' ? 'Mentorship Rating' : 'Overall Grade'}
+                                </div>
+                                <div className={`text-7xl font-black text-transparent bg-clip-text leading-none ${data.meta.session_mode === 'mentorship'
+                                    ? 'bg-gradient-to-br from-purple-500 to-pink-500'
+                                    : 'bg-gradient-to-br from-blue-400 to-indigo-500'
+                                    }`}>
                                     {data.meta.overall_grade}
                                 </div>
                             </div>

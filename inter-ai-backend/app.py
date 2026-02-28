@@ -44,6 +44,9 @@ cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
 flask_cors.CORS(app, origins=cors_origins)
 
 # ---------------------------------------------------------
+from database import save_session_to_db, get_session_from_db, get_user_sessions_from_db, clear_user_sessions_from_db
+
+# ---------------------------------------------------------
 # In-Memory Storage (Fallback if Database not available)
 # ---------------------------------------------------------
 SESSIONS: Dict[str, Dict[str, Any]] = {}
@@ -52,9 +55,15 @@ SESSIONS: Dict[str, Dict[str, Any]] = {}
 # Hybrid Storage Helper Functions
 # ---------------------------------------------------------
 def get_session(session_id: str) -> Dict[str, Any]:
-    """Get session from in-memory storage."""
+    """Get session from in-memory storage or database."""
     if session_id in SESSIONS:
         return SESSIONS[session_id]
+    
+    # Try database
+    db_session = get_session_from_db(session_id)
+    if db_session:
+        SESSIONS[session_id] = db_session
+        return db_session
     
     return None
 
@@ -198,10 +207,25 @@ def detect_framework_fallback(text: str) -> str:
             if word in text_lower: return fw
     return None
 
-def build_simulation_prompt(simulation_id, role, ai_role, scenario):
+def build_simulation_prompt(simulation_id, role, ai_role, scenario, mode="evaluation"):
     """Build simulation-specific system prompts for structured coaching scenarios."""
     if simulation_id == "SIM-01-PERF-001":
-        system = f"""You are Aamir, a Sales Associate with 1.5 years of experience.
+        if mode == "mentorship":
+            system = f"""You are the EXPERT MANAGER demonstrating a "Best Practice" performance coaching session.
+            
+YOUR ROLE:
+1. EXPERT: You are playing the role of the Manager. You are a master at coaching and delivering feedback.
+2. LEARNER: The user is playing the role of Aamir (the Sales Associate). They are observing your approach.
+3. GOAL: Demonstrate the perfect way to handle a performance gap conversation using curiosity, empathy, and clear expectations.
+
+SCENARIO CONTEXT: {scenario}
+
+### YOUR OPENING:
+1. Start the conversation IMMEDIATELY as the Manager.
+2. Be supportive but firm about standards.
+3. START NOW."""
+        else:
+            system = f"""You are Aamir, a Sales Associate with 1.5 years of experience.
 
 CHARACTER TRAITS:
 - Sincere, polite, anxious under pressure
@@ -276,7 +300,7 @@ def build_summary_prompt(role, ai_role, scenario, framework, mode="coaching", ai
     
     # Check for structured simulation first
     if simulation_id:
-        sim_prompt = build_simulation_prompt(simulation_id, role, ai_role, scenario)
+        sim_prompt = build_simulation_prompt(simulation_id, role, ai_role, scenario, mode=mode)
         if sim_prompt:
             return sim_prompt
     
@@ -374,6 +398,7 @@ YOUR ROLE:
 1. EXPERT: You are "{ai_role}". You are a master at this skill.
 2. LEARNER: The user is "{role}". They are observing you or interacting with you learning.
 3. GOAL: Demonstrate the perfect way to handle this situation.
+4. APPROACH: Be wise, high-EQ, and strategic. If the user asks a question, explain your logic and why you are taking a specific approach.
 
 SCENARIO: {scenario}
 
@@ -409,7 +434,7 @@ START NOW. Speak ONLY as {ai_role}."""
 
     return [{"role": "system", "content": system}, {"role": "user", "content": '{"instruction": "Start coaching practice session"}'}]
 
-def build_simulation_followup(simulation_id, sess_dict, latest_user):
+def build_simulation_followup(simulation_id, sess_dict, latest_user, mode="evaluation"):
     """Build follow-up prompts for structured simulation scenarios."""
     transcript = sess_dict.get("transcript", [])
     history = [{"role": t["role"], "content": t["content"]} for t in transcript]
@@ -421,7 +446,25 @@ def build_simulation_followup(simulation_id, sess_dict, latest_user):
     user_role = sess_dict.get('role', 'Manager')
     
     if simulation_id == "SIM-01-PERF-001":
-        system = f"""You are Aamir, a sincere Sales Associate in a coaching conversation with your manager.
+        if mode == "mentorship":
+            system = f"""You are the EXPERT MANAGER demonstrating a "Best Practice" performance coaching session.
+            
+You MUST stay in character as the Expert Manager at ALL times.
+
+YOUR CHARACTER:
+- Master Coach with 10+ years experience.
+- Uses the GROW model naturally.
+- Focuses on "Aamir's" growth and identification of his own barriers.
+
+GOAL: Demonstrate how to coach Aamir (who is currently being played by the User) into realizing his own gaps with premium customers.
+
+SCENARIO CONTEXT: {scenario}
+
+CONVERSATION SO FAR:
+{json.dumps(history, indent=2)}
+"""
+        else:
+            system = f"""You are Aamir, a sincere Sales Associate in a coaching conversation with your manager.
 
 You MUST stay in character as Aamir at ALL times. Never break character.
 
@@ -477,7 +520,7 @@ Current turn: {turn_count + 1}
 CONVERSATION SO FAR:
 {json.dumps(history, indent=2)}
 """
-        return [{"role": "system", "content": system}, {"role": "user", "content": f"Manager said: {latest_user}"}]
+        return [{"role": "system", "content": system}, {"role": "user", "content": f"User said: {latest_user}"}]
     return None
 
 
@@ -486,8 +529,9 @@ def build_followup_prompt(sess_dict, latest_user, rag_suggestions):
     
     # Check for structured simulation first
     simulation_id = sess_dict.get('simulation_id')
+    mode = sess_dict.get('mode', 'coaching')
     if simulation_id:
-        sim_prompt = build_simulation_followup(simulation_id, sess_dict, latest_user)
+        sim_prompt = build_simulation_followup(simulation_id, sess_dict, latest_user, mode=mode)
         if sim_prompt:
             return sim_prompt
     
@@ -499,7 +543,6 @@ def build_followup_prompt(sess_dict, latest_user, rag_suggestions):
     ai_role = sess_dict.get('ai_role', 'the other party')
     user_role = sess_dict.get('role', 'User')
     scenario = sess_dict.get('scenario', '')
-    mode = sess_dict.get('mode', 'coaching')
     ai_character = sess_dict.get('ai_character', 'alex') # Default to alex
     turn_count = len([t for t in transcript if t.get('role') == 'user'])
 
@@ -537,11 +580,11 @@ Current turn: {turn_count + 1}
 <<FRAMEWORK: DETECTED_FRAMEWORK>>
 <<RELEVANCE: YES>>
 """
-    elif sess_dict.get('scenario_type') == "mentorship":
-        # MENTORSHIP MODE (New)
+    elif mode == "mentorship":
+        # MENTORSHIP MODE (Refined)
         system = f"""You are acting as an EXPERT MENTOR demonstrated "Best Practice" behavior.
 
-**MODE: MENTORSHIP (PURE LEANING)**
+**MODE: MENTORSHIP (PURE LEARNING)**
 - You are playing the role of "{ai_role}" (The Expert).
 - The user is the "Learner" observing you, or interacting with you to ask questions.
 - **GOAL**: Teach by specific example. Explain the "Why" behind your actions if asked.
@@ -556,7 +599,7 @@ Current turn: {turn_count + 1}
 
 ### YOUR RESPONSE:
 Provide a response that demonstrates high-EQ, strategic communication.
-If the user asks a question, answer it as a Mentor.
+If the user asks a question, answer it as a Mentor. Show how a master would handle this.
 If the context requires a roleplay move, make the "Perfect Move".
 """
     else:
@@ -652,12 +695,21 @@ def get_history():
         if not user:
             return jsonify({"error": "Invalid token"}), 401
             
-        # Filter sessions in memory by user_id
+        # Try fetching from Database first
         user_id_str = str(user.id)
-        user_sessions = [
-            s for s in SESSIONS.values() 
-            if str(s.get("user_id")) == user_id_str
-        ]
+        db_sessions = get_user_sessions_from_db(user_id_str)
+        
+        if db_sessions and len(db_sessions) > 0:
+            user_sessions = db_sessions
+            # Update cache
+            for s in db_sessions:
+                SESSIONS[s["id"]] = s
+        else:
+            # Fallback to fetching sessions in memory by user_id
+            user_sessions = [
+                s for s in SESSIONS.values() 
+                if str(s.get("user_id")) == user_id_str
+            ]
         
         # Sort by created_at desc (newest first)
         user_sessions.sort(key=lambda x: x.get("created_at", ""), reverse=True)
@@ -912,6 +964,11 @@ def start_session():
     scenario = data.get("scenario")
     title = data.get("title") # NEW: Title passed from frontend
     framework = data.get("framework", "auto")
+    # Support optional flip_roles flag: when true, swap role and ai_role
+    flip_roles = data.get("flip_roles", False)
+    if flip_roles:
+        print("[INFO] flip_roles flag detected - swapping role and ai_role", flush=True)
+        role, ai_role = ai_role, role
     
     # Support both old 'mode' and new 'scenario_type' parameters
     scenario_type = data.get("scenario_type")
@@ -944,6 +1001,7 @@ def start_session():
     mode_map = {
         "coaching": "evaluation",      # Coaching scenarios get scores
         "negotiation": "evaluation",   # Negotiation scenarios get scores
+        "mentorship": "evaluation",    # Mentorship scenarios get scores
         "reflection": "coaching",      # Reflection scenarios are qualitative
         "custom": "coaching"           # Custom scenarios default to coaching style
     }
@@ -1010,6 +1068,7 @@ def start_session():
         "meta": {"framework_counts": {}, "relevance_issues": 0}
     }
     SESSIONS[session_id] = session_data
+    save_session_to_db(session_data) # Save to Supabase
 
     return jsonify({
         "session_id": session_id, 
@@ -1086,6 +1145,7 @@ def chat(session_id: str):
         
     # Persist response
     sess["transcript"].append({"role": "assistant", "content": raw_response})
+    save_session_to_db(sess) # Save to Supabase
  
     return jsonify({
         "follow_up": clean_response, 
@@ -1164,8 +1224,7 @@ def complete_session(session_id: str):
     
     sess["completed"] = True
     sess["report_file"] = "dynamic"
-    
-
+    save_session_to_db(sess) # Save completed status and report_data to Supabase
     
     return jsonify({"message": "Report generated", "report_file": report_path, "scenario_type": scenario_type})
 
@@ -1366,7 +1425,16 @@ def get_sessions():
 def clear_sessions():
     """Clear all session history."""
     try:
-        SESSIONS.clear()
+        user = get_authenticated_user()
+        if user:
+            clear_user_sessions_from_db(str(user.id))
+            
+            # Remove from memory as well
+            keys_to_delete = [k for k, v in SESSIONS.items() if str(v.get("user_id")) == str(user.id)]
+            for k in keys_to_delete:
+                del SESSIONS[k]
+        else:
+            SESSIONS.clear()
         print(" [SUCCESS] Sessions cleared successfully")
         return jsonify({"message": "History cleared successfully"})
     except Exception as e:
