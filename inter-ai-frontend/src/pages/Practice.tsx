@@ -400,7 +400,9 @@ export default function Practice() {
                     sessionId: session_id,
                     completed: false,
                     scenario_type: result.scenario_type || 'custom',
-                    ai_character: result.ai_character || data.ai_character // Prioritize backend confirmation
+                    ai_character: result.ai_character || data.ai_character,
+                    multi_characters: result.multi_characters || false,
+                    characters: result.characters || null
                 }),
             )
 

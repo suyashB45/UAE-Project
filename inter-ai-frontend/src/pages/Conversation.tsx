@@ -21,6 +21,15 @@ interface SessionData {
     transcript: TranscriptMessage[]
     sessionId?: string
     ai_character?: string
+    multi_characters?: boolean
+    characters?: CharacterConfig[]
+}
+
+interface CharacterConfig {
+    name: string
+    label: string
+    voice: string
+    color: string
 }
 
 interface ConversationState {
@@ -48,6 +57,8 @@ export default function Conversation() {
     const recognitionRef = useRef<any>(null)
     const transcriptEndRef = useRef<HTMLDivElement>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
+    const sessionEndedRef = useRef(false)
+    const ttsAbortRef = useRef<AbortController | null>(null)
 
     const [state, setState] = useState<ConversationState>({
         transcript: [],
@@ -63,6 +74,39 @@ export default function Conversation() {
     const [isAiSpeaking, setIsAiSpeaking] = useState(false)
     const [showEndConfirm, setShowEndConfirm] = useState(false)
     const [isEnding, setIsEnding] = useState(false)
+    const [multiCharacters, setMultiCharacters] = useState(false)
+    const [characters, setCharacters] = useState<CharacterConfig[]>([])
+
+    // Helper: Parse character-labeled lines from AI response
+    const parseCharacterLines = (text: string): { char: string; text: string; voice: string; color: string }[] => {
+        if (!multiCharacters || !characters.length) return [{ char: '', text, voice: 'fable', color: 'blue' }]
+
+        const lines = text.split('\n').filter(l => l.trim())
+        const parsed: { char: string; text: string; voice: string; color: string }[] = []
+
+        for (const line of lines) {
+            let matched = false
+            for (const c of characters) {
+                // Match [CharName]: or CharName:
+                const regex = new RegExp(`^\\[?${c.name}\\]?:\\s*(.+)`, 'i')
+                const match = line.match(regex)
+                if (match) {
+                    parsed.push({ char: c.name, text: match[1].trim(), voice: c.voice, color: c.color })
+                    matched = true
+                    break
+                }
+            }
+            if (!matched && line.trim()) {
+                // Append to last character if no label
+                if (parsed.length > 0) {
+                    parsed[parsed.length - 1].text += ' ' + line.trim()
+                } else {
+                    parsed.push({ char: characters[0]?.name || '', text: line.trim(), voice: characters[0]?.voice || 'fable', color: characters[0]?.color || 'blue' })
+                }
+            }
+        }
+        return parsed.length > 0 ? parsed : [{ char: '', text, voice: 'fable', color: 'blue' }]
+    }
 
     // Scroll to bottom of transcript only if it's open
     useEffect(() => {
@@ -87,22 +131,35 @@ export default function Conversation() {
     // Audio playback for AI response
     const aiAudioRef = useRef<HTMLAudioElement | null>(null)
 
-    const speakText = async (text: string, forcedCharacter?: string) => {
+    const speakText = async (text: string, forcedCharacter?: string, forceVoice?: string) => {
+        // Don't start TTS if session has ended
+        if (sessionEndedRef.current) return
+
         try {
-            // Determine voice based on character
-            // Use forcedCharacter if provided (fixes race condition on mount)
-            const character = forcedCharacter || state.sessionData?.ai_character || 'alex'
-            const voice = character === 'alex' ? 'fable' : 'nova'
+            // Determine voice: explicit override > character-based > default
+            const voice = forceVoice || (forcedCharacter === 'sarah' || state.sessionData?.ai_character === 'sarah' ? 'nova' : 'fable')
 
             setIsAiSpeaking(true)
+
+            // Abort any previous TTS request
+            if (ttsAbortRef.current) ttsAbortRef.current.abort()
+            const ttsController = new AbortController()
+            ttsAbortRef.current = ttsController
 
             const response = await fetch(getApiUrl('/api/speak'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, voice })
+                body: JSON.stringify({ text, voice }),
+                signal: ttsController.signal
             })
 
             if (!response.ok) throw new Error("TTS failed")
+
+            // Don't play if session ended while fetching
+            if (sessionEndedRef.current) {
+                setIsAiSpeaking(false)
+                return
+            }
 
             const blob = await response.blob()
             const url = URL.createObjectURL(blob)
@@ -133,11 +190,24 @@ export default function Conversation() {
         }
     }
 
+    // Speak multi-character text with different voices sequentially
+    const speakMultiCharacter = async (text: string) => {
+        if (sessionEndedRef.current) return
+        const parts = parseCharacterLines(text)
+        for (const part of parts) {
+            if (sessionEndedRef.current) break
+            await speakText(part.text, undefined, part.voice)
+        }
+    }
+
     // Stop audio on unmount
     useEffect(() => {
         return () => {
+            sessionEndedRef.current = true
+            if (ttsAbortRef.current) ttsAbortRef.current.abort()
             if (aiAudioRef.current) {
                 aiAudioRef.current.pause()
+                aiAudioRef.current = null
             }
         }
     }, [])
@@ -160,14 +230,21 @@ export default function Conversation() {
                 transcript: initialTranscript as TranscriptMessage[],
             }))
 
-            // Only speak if it's a fresh load of a new session? 
-            // Or maybe don't auto-speak on reload to avoid annoyance.
-            // keeping original logic:
+            // Set multi-character state
+            if (sessionData.multi_characters && sessionData.characters) {
+                setMultiCharacters(true)
+                setCharacters(sessionData.characters)
+            }
+
+            // Speak initial message
             const latestMsg = initialTranscript[initialTranscript.length - 1]
             if (latestMsg.role === 'assistant' && initialTranscript.length === 1) {
                 const timer = setTimeout(() => {
-                    // Pass current sessionData character directly to avoid stale state issue
-                    speakText(latestMsg.content, sessionData.ai_character)
+                    if (sessionData.multi_characters && sessionData.characters) {
+                        speakMultiCharacter(latestMsg.content)
+                    } else {
+                        speakText(latestMsg.content, sessionData.ai_character)
+                    }
                 }, 500)
                 return () => clearTimeout(timer)
             }
@@ -339,7 +416,11 @@ export default function Conversation() {
                 isProcessing: false,
             }))
 
-            speakText(aiResponse)
+            if (multiCharacters) {
+                speakMultiCharacter(aiResponse)
+            } else {
+                speakText(aiResponse)
+            }
 
             // Update local storage
             if (state.sessionData) {
@@ -371,10 +452,19 @@ export default function Conversation() {
         if (isEnding) return // Prevent double-clicks
         setIsEnding(true)
 
+        // Mark session as ended to prevent any new TTS
+        sessionEndedRef.current = true
+
+        // Abort any in-flight TTS request
+        if (ttsAbortRef.current) {
+            ttsAbortRef.current.abort()
+        }
+
         // Aggressively kill AI Speech
         if (aiAudioRef.current) {
             aiAudioRef.current.pause()
             aiAudioRef.current.currentTime = 0
+            aiAudioRef.current = null
         }
         setIsAiSpeaking(false)
 
@@ -619,32 +709,63 @@ export default function Conversation() {
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
-                                className={`backdrop-blur-xl border rounded-2xl p-5 sm:p-6 shadow-lg max-h-[200px] overflow-y-auto ${lastMessage.role === 'assistant'
-                                    ? 'bg-primary/5 border-primary/20'
-                                    : 'bg-card/80 border-border'
-                                    }`}
+                                className="space-y-3 max-h-[300px] overflow-y-auto"
                             >
-                                <div className="flex items-center gap-2 mb-3">
-                                    <div className={`p-1.5 rounded-lg ${lastMessage.role === 'assistant' ? 'bg-primary/10' : 'bg-muted/50'}`}>
-                                        {lastMessage.role === 'assistant' ? <Bot className="w-3.5 h-3.5 text-primary" /> : <User className="w-3.5 h-3.5 text-muted-foreground" />}
-                                    </div>
-                                    <span className={`text-xs font-bold uppercase tracking-widest ${lastMessage.role === 'assistant' ? 'text-primary' : 'text-muted-foreground'}`}>
-                                        {lastMessage.role === 'assistant' ? 'AI Coach' : 'You'}
-                                    </span>
-                                    {lastMessage.role === 'assistant' && isAiSpeaking && (
-                                        <div className="flex items-center gap-0.5 ml-auto">
-                                            {[...Array(4)].map((_, i) => (
-                                                <div key={i} className="w-1 bg-primary rounded-full animate-pulse" style={{ height: `${8 + Math.random() * 8}px`, animationDelay: `${i * 0.15}s` }} />
-                                            ))}
+                                {lastMessage.role === 'assistant' && multiCharacters ? (
+                                    /* Multi-character: render each character's line separately */
+                                    parseCharacterLines(lastMessage.content).map((part, idx) => (
+                                        <div
+                                            key={idx}
+                                            className={`backdrop-blur-xl border rounded-2xl p-4 sm:p-5 shadow-lg ${part.color === 'pink'
+                                                ? 'bg-pink-500/10 border-pink-500/20'
+                                                : 'bg-blue-500/10 border-blue-500/20'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <div className={`p-1.5 rounded-lg ${part.color === 'pink' ? 'bg-pink-500/10' : 'bg-blue-500/10'
+                                                    }`}>
+                                                    <Bot className={`w-3.5 h-3.5 ${part.color === 'pink' ? 'text-pink-500' : 'text-blue-500'
+                                                        }`} />
+                                                </div>
+                                                <span className={`text-xs font-bold uppercase tracking-widest ${part.color === 'pink' ? 'text-pink-500' : 'text-blue-500'
+                                                    }`}>
+                                                    {part.char}
+                                                </span>
+                                            </div>
+                                            <p className="text-base sm:text-lg leading-relaxed text-foreground font-medium">
+                                                {part.text}
+                                            </p>
                                         </div>
-                                    )}
-                                </div>
-                                <p className={`text-base sm:text-lg leading-relaxed ${lastMessage.role === 'assistant'
-                                    ? 'text-foreground font-medium'
-                                    : 'text-muted-foreground'
-                                    }`}>
-                                    {lastMessage.content}
-                                </p>
+                                    ))
+                                ) : (
+                                    /* Single character: original rendering */
+                                    <div className={`backdrop-blur-xl border rounded-2xl p-5 sm:p-6 shadow-lg ${lastMessage.role === 'assistant'
+                                        ? 'bg-primary/5 border-primary/20'
+                                        : 'bg-card/80 border-border'
+                                        }`}>
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <div className={`p-1.5 rounded-lg ${lastMessage.role === 'assistant' ? 'bg-primary/10' : 'bg-muted/50'}`}>
+                                                {lastMessage.role === 'assistant' ? <Bot className="w-3.5 h-3.5 text-primary" /> : <User className="w-3.5 h-3.5 text-muted-foreground" />}
+                                            </div>
+                                            <span className={`text-xs font-bold uppercase tracking-widest ${lastMessage.role === 'assistant' ? 'text-primary' : 'text-muted-foreground'}`}>
+                                                {lastMessage.role === 'assistant' ? 'AI Coach' : 'You'}
+                                            </span>
+                                            {lastMessage.role === 'assistant' && isAiSpeaking && (
+                                                <div className="flex items-center gap-0.5 ml-auto">
+                                                    {[...Array(4)].map((_, i) => (
+                                                        <div key={i} className="w-1 bg-primary rounded-full animate-pulse" style={{ height: `${8 + Math.random() * 8}px`, animationDelay: `${i * 0.15}s` }} />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <p className={`text-base sm:text-lg leading-relaxed ${lastMessage.role === 'assistant'
+                                            ? 'text-foreground font-medium'
+                                            : 'text-muted-foreground'
+                                            }`}>
+                                            {lastMessage.content}
+                                        </p>
+                                    </div>
+                                )}
                             </motion.div>
                         ) : (
                             <motion.div
@@ -752,20 +873,43 @@ export default function Conversation() {
                                         key={idx}
                                         className={`flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                                     >
-                                        <div className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest ${msg.role === 'user' ? 'text-muted-foreground flex-row-reverse' : 'text-primary'}`}>
-                                            {msg.role === 'user' ? (
-                                                <>You <div className="w-6 h-[1px] bg-border"></div></>
-                                            ) : (
-                                                <>AI Coach <div className="w-6 h-[1px] bg-primary/30"></div></>
-                                            )}
-                                        </div>
+                                        {msg.role === 'assistant' && multiCharacters ? (
+                                            /* Multi-character transcript entries */
+                                            <div className="space-y-2 w-full">
+                                                {parseCharacterLines(msg.content).map((part, pIdx) => (
+                                                    <div key={pIdx}>
+                                                        <div className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest mb-1 ${part.color === 'pink' ? 'text-pink-500' : 'text-blue-500'
+                                                            }`}>
+                                                            {part.char} <div className={`w-6 h-[1px] ${part.color === 'pink' ? 'bg-pink-500/30' : 'bg-blue-500/30'}`}></div>
+                                                        </div>
+                                                        <div className={`p-4 rounded-2xl max-w-[85%] text-sm leading-relaxed backdrop-blur-md border shadow-lg rounded-tl-sm ${part.color === 'pink'
+                                                                ? 'bg-pink-500/10 border-pink-500/20 text-foreground'
+                                                                : 'bg-blue-500/10 border-blue-500/20 text-foreground'
+                                                            }`}>
+                                                            {part.text}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            /* Original single-character transcript entries */
+                                            <>
+                                                <div className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest ${msg.role === 'user' ? 'text-muted-foreground flex-row-reverse' : 'text-primary'}`}>
+                                                    {msg.role === 'user' ? (
+                                                        <>You <div className="w-6 h-[1px] bg-border"></div></>
+                                                    ) : (
+                                                        <>AI Coach <div className="w-6 h-[1px] bg-primary/30"></div></>
+                                                    )}
+                                                </div>
 
-                                        <div className={`p-5 rounded-2xl max-w-[85%] text-sm leading-relaxed backdrop-blur-md border shadow-lg ${msg.role === 'user'
-                                            ? 'bg-card border-border text-foreground rounded-tr-sm'
-                                            : 'bg-primary/10 border-primary/20 text-foreground rounded-tl-sm'
-                                            }`}>
-                                            {msg.content}
-                                        </div>
+                                                <div className={`p-5 rounded-2xl max-w-[85%] text-sm leading-relaxed backdrop-blur-md border shadow-lg ${msg.role === 'user'
+                                                    ? 'bg-card border-border text-foreground rounded-tr-sm'
+                                                    : 'bg-primary/10 border-primary/20 text-foreground rounded-tl-sm'
+                                                    }`}>
+                                                    {msg.content}
+                                                </div>
+                                            </>
+                                        )}
                                     </motion.div>
                                 ))}
                                 <div ref={transcriptEndRef} />

@@ -292,6 +292,121 @@ CRITICAL RULES:
 SCENARIO CONTEXT: {scenario}
 The user is: {role}"""
         return [{"role": "system", "content": system}]
+
+    # --- CONFLICT RESOLUTION: SIM-05-CON-001 (Assessment) / MENT-05-CON-001 (Mentorship) ---
+    if simulation_id in ("SIM-05-CON-001", "MENT-05-CON-001"):
+        is_mentorship_sim = simulation_id == "MENT-05-CON-001"
+
+        if is_mentorship_sim:
+            # MENTORSHIP: User is one of the conflicted team members
+            system = f"""You are playing TWO characters in a workplace conflict mediation scene.
+
+CHARACTERS:
+1. [Manager] — The Team Manager who has called this meeting to resolve the conflict.
+2. [Colleague] — The other conflicted team member (the one the user is in conflict with).
+
+The USER is playing: {role} (one of the conflicted parties).
+
+FORMATTING RULES — CRITICAL:
+- ALWAYS prefix EVERY line of dialogue with the character label.
+- Format: [Manager]: dialogue here
+- Format: [Colleague]: dialogue here
+- You may have multiple lines from different characters in one response.
+- NEVER speak as the user's character.
+
+OPENING SCENE:
+The Manager opens the meeting. The Colleague is also present and will speak.
+
+[Manager]: Thank you both for coming. I've noticed the tension between you two has become visible to the team, and I think it's important we address it directly. I want to understand both perspectives. Let me start by asking — what's been the main challenge from your side?
+[Colleague]: Honestly, I think the delays are coming from their end. I've been sending my work on time, but I keep waiting for responses that never come. It's frustrating.
+
+CHARACTER BEHAVIOR - COLLEAGUE:
+- Initially defensive and blaming the user
+- Will soften IF the user uses "I" statements and avoids blame
+- Will escalate IF the user attacks or blames back
+- Eventually willing to find common ground if approached professionally
+
+CHARACTER BEHAVIOR - MANAGER:
+- Neutral mediator, keeps the conversation productive
+- Redirects blame into constructive discussion
+- Asks clarifying questions to both parties
+
+SCENARIO CONTEXT: {scenario}
+
+RESPONSE RULES:
+- Keep each character's lines to 2-3 sentences max
+- Use natural speech patterns
+- NEVER break character
+- NEVER mention frameworks by name
+- React dynamically based on the user's approach"""
+        else:
+            # ASSESSMENT: User is the Team Manager mediating between Rohan and Meera
+            system = f"""You are playing TWO characters in a workplace conflict mediation scene.
+
+CHARACTERS:
+1. [Rohan] — A team member who blames Meera for project delays. Assertive, slightly aggressive, data-oriented.
+2. [Meera] — A team member who blames Rohan for poor communication. Defensive, detail-oriented, emotional.
+
+The USER is playing: {role} (Team Manager mediating the conflict).
+
+FORMATTING RULES — CRITICAL:
+- ALWAYS prefix EVERY line of dialogue with the character label in square brackets.
+- Format: [Rohan]: dialogue here
+- Format: [Meera]: dialogue here
+- You may have multiple lines from different characters in one response.
+- NEVER speak as the Manager (that's the user).
+
+OPENING SCENE (deliver this IMMEDIATELY):
+[Rohan]: Honestly, Meera, if you had just sent the reports on time last week, we wouldn't be in this mess. I'm tired of cleaning up your delays.
+[Meera]: Oh, come on, Rohan. You missed the deadline to review the data I sent. How can I be responsible when you don't do your part? This blame game isn't helping anyone.
+[Rohan]: It's not a game when it affects the whole team. You always find a way to shift responsibility.
+[Meera]: And you always jump to conclusions without checking facts. Maybe if you communicated better, we wouldn't have these issues.
+[Rohan]: Fine, but what do you suggest we do now? Because this back-and-forth isn't solving anything.
+
+CHARACTER TRAITS:
+
+ROHAN:
+- Assertive, slightly confrontational
+- Values efficiency and deadlines
+- Gets frustrated when he feels blamed
+- Will calm down IF manager validates his concerns with data
+- Will escalate IF manager sides with Meera or dismisses his points
+
+MEERA:
+- Detail-oriented, emotionally reactive
+- Feels attacked and undervalued
+- Will open up IF manager creates psychological safety
+- Will withdraw or become passive-aggressive IF manager is dismissive
+- Secretly wants acknowledgment for her extra work
+
+ADAPTIVE BEHAVIOR RULES:
+
+BRANCH A — If Manager is NEUTRAL + asks OPEN questions:
+- Both gradually calm down
+- Rohan starts offering specifics: "Okay, the real issue is the handoff process..."
+- Meera admits: "I should have flagged the deadline earlier..."
+- They move toward a working agreement
+
+BRANCH B — If Manager SIDES with one person:
+- The other escalates: "See? This is exactly the problem!"
+- Tension increases
+- The favored person becomes overconfident
+
+BRANCH C — If Manager is DIRECTIVE without listening:
+- Both become quietly resentful
+- Give minimal responses: "Sure...", "If you say so..."
+- No real resolution
+
+SCENARIO CONTEXT: {scenario}
+
+RESPONSE RULES:
+- Keep each character's lines to 2-3 sentences max
+- Use natural, emotional speech patterns
+- NEVER break character or mention frameworks
+- NEVER speak as the Manager
+- React dynamically based on the user's mediation approach"""
+        return [{"role": "system", "content": system}]
+
     return None
 
 
@@ -521,6 +636,62 @@ CONVERSATION SO FAR:
 {json.dumps(history, indent=2)}
 """
         return [{"role": "system", "content": system}, {"role": "user", "content": f"User said: {latest_user}"}]
+
+    # --- CONFLICT RESOLUTION FOLLOW-UP: SIM-05-CON-001 / MENT-05-CON-001 ---
+    if simulation_id in ("SIM-05-CON-001", "MENT-05-CON-001"):
+        is_mentorship_sim = simulation_id == "MENT-05-CON-001"
+        user_role = sess_dict.get('role', 'Team Manager')
+
+        if is_mentorship_sim:
+            system = f"""You are playing TWO characters: [Manager] and [Colleague] in a workplace conflict mediation.
+
+The USER is playing: {user_role} (one of the conflicted parties).
+
+FORMATTING RULES — CRITICAL:
+- ALWAYS prefix EVERY line with [Manager]: or [Colleague]:
+- NEVER speak as the user's character.
+
+[Manager] is a neutral mediator. [Colleague] is the other party in the conflict.
+
+ADAPTIVE BEHAVIOR:
+- If user uses "I" statements and stays calm → Colleague softens, Manager validates
+- If user blames or attacks → Colleague escalates, Manager redirects
+- If user proposes solutions → Both respond constructively
+
+Keep each character's lines to 2-3 sentences. Use natural speech. NEVER break character.
+
+Current turn: {turn_count + 1}
+
+CONVERSATION SO FAR:
+{json.dumps(history, indent=2)}
+"""
+        else:
+            system = f"""You are playing TWO characters: [Rohan] and [Meera] in a workplace conflict mediation.
+
+The USER is the Team Manager mediating between them.
+
+FORMATTING RULES — CRITICAL:
+- ALWAYS prefix EVERY line with [Rohan]: or [Meera]:
+- You may have multiple lines from both characters.
+- NEVER speak as the Manager (that's the user).
+
+ROHAN: Assertive, deadline-focused. Calms when validated with data. Escalates when dismissed.
+MEERA: Detail-oriented, emotional. Opens up with psychological safety. Withdraws when dismissed.
+
+ADAPTIVE BEHAVIOR:
+- If Manager asks open questions and stays neutral → Both gradually calm, offer specifics
+- If Manager sides with one → The other escalates
+- If Manager is directive without listening → Both become resentful, give minimal responses
+
+Keep each character's lines to 2-3 sentences. Use natural speech. NEVER break character.
+
+Current turn: {turn_count + 1}
+
+CONVERSATION SO FAR:
+{json.dumps(history, indent=2)}
+"""
+        return [{"role": "system", "content": system}, {"role": "user", "content": f"User said: {latest_user}"}]
+
     return None
 
 
@@ -754,6 +925,47 @@ def health_check():
             "sessions": len(SESSIONS)
         }
     })
+
+# ---------------------------------------------------------
+# Contact Sales Endpoint
+# ---------------------------------------------------------
+@app.route("/api/contact-sales", methods=["POST"])
+def contact_sales():
+    """Store contact form submissions in Supabase."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid JSON"}), 400
+
+        name = data.get("name", "").strip()
+        email = data.get("email", "").strip()
+        company = data.get("company", "").strip()
+        team_size = data.get("teamSize", "").strip()
+        message = data.get("message", "").strip()
+
+        if not name or not email:
+            return jsonify({"error": "Name and email are required"}), 400
+
+        # Store in Supabase
+        from database import supabase as db_client
+        if db_client:
+            db_client.table("contact_submissions").insert({
+                "name": name,
+                "email": email,
+                "company": company,
+                "team_size": team_size,
+                "message": message,
+                "status": "new"
+            }).execute()
+            print(f"[SUCCESS] Contact form saved: {name} ({email})")
+        else:
+            print(f"[WARNING] DB not available. Contact: {name} ({email}), Company: {company}, Team: {team_size}")
+
+        return jsonify({"success": True}), 200
+
+    except Exception as e:
+        print(f"[ERROR] Contact form error: {e}")
+        return jsonify({"error": "Failed to save contact request"}), 500
 
 # Audio serving route removed
 
@@ -1063,14 +1275,31 @@ def start_session():
     # Override with fixed first message for structured simulations
     if simulation_id == "SIM-01-PERF-001":
         summary = "Thanks for taking time to meet me... I know my numbers haven't been great. I'm honestly trying, but this month also traffic was low. I'm not sure what else I can do."
+    elif simulation_id == "SIM-05-CON-001":
+        summary = "[Rohan]: Honestly, Meera, if you had just sent the reports on time last week, we wouldn't be in this mess. I'm tired of cleaning up your delays.\n[Meera]: Oh, come on, Rohan. You missed the deadline to review the data I sent. How can I be responsible when you don't do your part? This blame game isn't helping anyone.\n[Rohan]: It's not a game when it affects the whole team. You always find a way to shift responsibility.\n[Meera]: And you always jump to conclusions without checking facts. Maybe if you communicated better, we wouldn't have these issues.\n[Rohan]: Fine, but what do you suggest we do now? Because this back-and-forth isn't solving anything."
+    elif simulation_id == "MENT-05-CON-001":
+        summary = "[Manager]: Thank you both for coming. I've noticed the tension between you two has become visible to the team, and I think it's important we address it directly. I want to understand both perspectives. Let me start by asking \u2014 what's been the main challenge from your side?\n[Colleague]: Honestly, I think the delays are coming from their end. I've been sending my work on time, but I keep waiting for responses that never come. It's frustrating."
     
+    # Determine if this is a multi-character scenario
+    multi_characters = simulation_id in ("SIM-05-CON-001", "MENT-05-CON-001")
+    characters_config = None
+    if simulation_id == "SIM-05-CON-001":
+        characters_config = [
+            {"name": "Rohan", "label": "[Rohan]", "voice": "fable", "color": "blue"},
+            {"name": "Meera", "label": "[Meera]", "voice": "nova", "color": "pink"}
+        ]
+    elif simulation_id == "MENT-05-CON-001":
+        characters_config = [
+            {"name": "Manager", "label": "[Manager]", "voice": "fable", "color": "blue"},
+            {"name": "Colleague", "label": "[Colleague]", "voice": "nova", "color": "pink"}
+        ]
+
     # Store session in memory with scenario_type, session_mode, and user_id
     session_data = {
         "id": session_id,
         "created_at": dt.datetime.now().isoformat(),
 
         "role": role,
-        "ai_role": ai_role,
         "ai_role": ai_role,
         "scenario": scenario,
         "title": title, # Store title
@@ -1085,6 +1314,8 @@ def start_session():
         "user_id": user_id,  # Store user_id for ownership verification
         "ai_character": ai_character, # PERSIST CHARACTER CHOICE
         "simulation_id": simulation_id,  # Structured simulation identifier
+        "multi_characters": multi_characters,  # Flag for dual-character scenarios
+        "characters": characters_config,  # Character config for frontend
         "meta": {"framework_counts": {}, "relevance_issues": 0}
     }
     SESSIONS[session_id] = session_data
@@ -1096,7 +1327,9 @@ def start_session():
         "framework": framework, 
         "scenario_type": scenario_type,
         "session_mode": session_mode,
-        "ai_character": ai_character 
+        "ai_character": ai_character,
+        "multi_characters": multi_characters,
+        "characters": characters_config
     })
 
 
@@ -1137,7 +1370,16 @@ def chat(session_id: str):
     active_fw = framework_data if isinstance(framework_data, list) else [framework_data]
     suggestions = get_relevant_questions(user_msg, active_fw)
     
-    messages = build_followup_prompt(sess, user_msg, suggestions)
+    # Check for structured simulation follow-up first
+    sim_id = sess.get("simulation_id")
+    if sim_id:
+        sim_messages = build_simulation_followup(sim_id, sess, user_msg, mode=sess.get("mode", "evaluation"))
+        if sim_messages:
+            messages = sim_messages
+        else:
+            messages = build_followup_prompt(sess, user_msg, suggestions)
+    else:
+        messages = build_followup_prompt(sess, user_msg, suggestions)
     raw_response = llm_reply(messages, max_tokens=300)
     
     # 1. Extract Thought
