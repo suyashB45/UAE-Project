@@ -56,6 +56,9 @@ interface GenericReportData {
     behaviour_analysis?: BehaviourItem[]
     detailed_analysis?: DetailedAnalysisItem[] | string
     question_analysis?: QuestionAnalysis // NEW: Enhanced question analysis
+    mentorship_observations?: MentorshipObservation[]
+    learning_takeaways?: string[]
+    reflection_prompts?: string[]
     [key: string]: any
 }
 
@@ -124,6 +127,17 @@ interface SimulationReportData extends GenericReportData {
     coaching_style?: { primary_style: string; description: string };
     heat_map?: { dimension: string; score: number }[];
     ideal_questions?: string[];
+    mentorship_observations?: MentorshipObservation[];
+    learning_takeaways?: string[];
+    reflection_prompts?: string[];
+}
+
+// Mentorship-specific types
+interface MentorshipObservation {
+    observation: string
+    evidence_quote: string
+    significance: string
+    suggestion: string
 }
 
 // Question Analysis (Backend Enhanced)
@@ -307,13 +321,13 @@ export default function Report() {
                         <div className="flex flex-col items-end gap-4 min-w-[200px]">
                             <div className="text-right">
                                 <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-1">
-                                    {data.meta.session_mode === 'mentorship' ? 'Mentorship Rating' : 'Overall Grade'}
+                                    {data.meta.session_mode === 'mentorship' ? 'Session Status' : 'Overall Grade'}
                                 </div>
                                 <div className={`text-7xl font-black text-transparent bg-clip-text leading-none ${data.meta.session_mode === 'mentorship'
-                                    ? 'bg-gradient-to-br from-purple-500 to-pink-500'
+                                    ? 'bg-gradient-to-br from-purple-500 to-pink-500 text-5xl'
                                     : 'bg-gradient-to-br from-blue-400 to-indigo-500'
                                     }`}>
-                                    {data.meta.overall_grade}
+                                    {data.meta.session_mode === 'mentorship' ? '✓ Complete' : data.meta.overall_grade}
                                 </div>
                             </div>
                             <Button onClick={handleDownload} variant="outline" className="gap-2 border-border hover:bg-accent w-full">
@@ -772,332 +786,410 @@ const ScorecardSection = ({ items }: { items: ScorecardItem[] }) => (
 
 
 
-const SimulationView = ({ data }: { data: SimulationReportData }) => (
-    <div className="space-y-8">
-        {/* SECTION 1: Executive Summary */}
-        {data.executive_summary && (
-            <div className="grid lg:grid-cols-3 gap-6">
-                <GlassCard className="lg:col-span-2 border-l-4 border-l-primary flex flex-col justify-center">
-                    <SectionHeader icon={Activity} title="Executive Dashboard" colorClass="text-primary" bgClass="bg-primary/10" />
-                    <p className="text-xl font-medium text-foreground/90 leading-relaxed mb-6">
-                        {data.executive_summary.snapshot}
-                    </p>
-                    <div className="bg-primary/5 rounded-xl p-4 border border-primary/10">
-                        <span className="text-xs font-bold text-primary uppercase tracking-widest block mb-2">Outcome Summary</span>
-                        <p className="text-sm text-foreground/80">{data.executive_summary.outcome_summary}</p>
-                    </div>
-                </GlassCard>
-                <GlassCard className="flex flex-col items-center justify-center text-center bg-gradient-to-b from-primary/10 to-transparent">
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Final Score</span>
-                    <div className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-br from-blue-400 to-indigo-500">
-                        {data.executive_summary.final_score || data.meta.overall_grade}
-                    </div>
-                </GlassCard>
-            </div>
-        )}
+const SimulationView = ({ data }: { data: SimulationReportData }) => {
+    const isMentorship = data.meta?.session_mode === 'mentorship'
 
-        {/* NEW: COACHING STYLE PROFILE */}
-        {data.coaching_style && (
-            <div className="bg-gradient-to-r from-emerald-500/10 to-teal-500/5 rounded-3xl p-1 shadow-sm">
-                <GlassCard className="border-none shadow-none m-0 bg-background/60 backdrop-blur-sm">
-                    <SectionHeader icon={Award} title="Coaching Style Profile" colorClass="text-emerald-500" bgClass="bg-emerald-500/10" />
-                    <div className="flex flex-col md:flex-row gap-6 items-center">
-                        <div className="bg-background rounded-2xl p-6 border border-emerald-500/20 text-center md:w-1/3 shrink-0 shadow-sm">
-                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-2">Primary Style</span>
-                            <div className="text-2xl lg:text-3xl font-black text-emerald-500 uppercase tracking-wide">{data.coaching_style.primary_style}</div>
-                        </div>
-                        <p className="text-lg lg:text-xl text-foreground/90 leading-relaxed font-medium italic">"{data.coaching_style.description}"</p>
-                    </div>
-                </GlassCard>
-            </div>
-        )}
-
-        <div className="grid lg:grid-cols-2 gap-8">
-            {/* SECTION 2: Goal Attainment */}
-            {data.goal_attainment && (
-                <GlassCard>
-                    <SectionHeader icon={Target} title="Goal Attainment" colorClass="text-blue-500" bgClass="bg-blue-500/10" />
-                    <div className="flex items-center justify-between mb-6 pb-6 border-b border-border/50">
-                        <span className="text-lg font-bold text-foreground">Attainment Score</span>
-                        <span className="text-4xl font-black text-blue-500">{data.goal_attainment.score}</span>
-                    </div>
-                    <div className="space-y-6">
-                        <div>
-                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-2">Expectation vs Reality</span>
-                            <p className="text-sm text-foreground/90 leading-relaxed">{data.goal_attainment.expectation_vs_reality}</p>
-                        </div>
-                        {data.goal_attainment.primary_gaps && data.goal_attainment.primary_gaps.length > 0 && (
-                            <div>
-                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-2">Primary Gaps</span>
-                                <ul className="space-y-2">
-                                    {data.goal_attainment.primary_gaps.map((gap, i) => (
-                                        <li key={i} className="flex gap-2 text-sm text-foreground/80">
-                                            <X className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" /> {gap}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-                        {data.goal_attainment.observation_focus && data.goal_attainment.observation_focus.length > 0 && (
-                            <div>
-                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-2">Observation Focus</span>
-                                <div className="flex flex-wrap gap-2">
-                                    {data.goal_attainment.observation_focus.map((focus, i) => (
-                                        <span key={i} className="px-2 py-1 bg-slate-500/10 text-slate-600 rounded text-xs font-medium border border-slate-500/20">{focus}</span>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </GlassCard>
-            )}
-
-            {/* NEW: Context and Questioning Analysis */}
-            {data.meta.scenario && <ScenarioContextSection scenario={data.meta.scenario} />}
-            {data.question_analysis && <QuestionsSection analysis={data.question_analysis} />}
-            {data.detailed_analysis && <DetailedAnalysisSection items={data.detailed_analysis} />}
-
-            {/* SCORECARD AND HEAT MAP */}
-            <div className="flex flex-col gap-8">
-                {data.heat_map && data.heat_map.length > 0 && (
-                    <GlassCard>
-                        <SectionHeader icon={Activity} title="Competency Heat Map & Spider Graph" colorClass="text-purple-500" bgClass="bg-purple-500/10" />
-                        <div className="grid lg:grid-cols-2 gap-8 items-center">
-                            <CompetencyHeatMap items={data.heat_map} />
-                            <div className="bg-muted/10 rounded-3xl p-4 border border-border/50">
-                                <SkillRadarChart items={data.heat_map} />
-                            </div>
+    return (
+        <div className="space-y-8">
+            {/* SECTION 1: Executive Summary */}
+            {data.executive_summary && (
+                <div className={`grid ${isMentorship ? '' : 'lg:grid-cols-3'} gap-6`}>
+                    <GlassCard className={`${isMentorship ? '' : 'lg:col-span-2'} border-l-4 ${isMentorship ? 'border-l-purple-500' : 'border-l-primary'} flex flex-col justify-center`}>
+                        <SectionHeader icon={Activity} title={isMentorship ? "Mentorship Overview" : "Executive Dashboard"} colorClass={isMentorship ? "text-purple-500" : "text-primary"} bgClass={isMentorship ? "bg-purple-500/10" : "bg-primary/10"} />
+                        <p className="text-xl font-medium text-foreground/90 leading-relaxed mb-6">
+                            {data.executive_summary.snapshot}
+                        </p>
+                        <div className={`${isMentorship ? 'bg-purple-500/5 border-purple-500/10' : 'bg-primary/5 border-primary/10'} rounded-xl p-4 border`}>
+                            <span className={`text-xs font-bold ${isMentorship ? 'text-purple-500' : 'text-primary'} uppercase tracking-widest block mb-2`}>Outcome Summary</span>
+                            <p className="text-sm text-foreground/80">{data.executive_summary.outcome_summary}</p>
                         </div>
                     </GlassCard>
-                )}
-                {data.scorecard && (
-                    <ScorecardSection items={data.scorecard} />
-                )}
-            </div>
-        </div>
-
-        {/* DEEP DIVE ANALYSIS */}
-        {data.deep_dive_analysis && data.deep_dive_analysis.length > 0 && (
-            <GlassCard>
-                <SectionHeader icon={BookOpen} title="Deep Dive Analysis" colorClass="text-indigo-500" bgClass="bg-indigo-500/10" />
-                <div className="grid xl:grid-cols-2 gap-6">
-                    {data.deep_dive_analysis.map((item, i) => (
-                        <div key={i} className="bg-background rounded-xl p-5 border border-border shadow-sm">
-                            <h3 className="font-bold text-lg text-indigo-600 mb-4 pb-2 border-b border-indigo-500/10">{item.topic}</h3>
-                            <div className="space-y-3">
-                                {item.tone && <div className="text-sm"><span className="font-bold text-muted-foreground">Tone:</span> <span className="text-foreground/90">{item.tone}</span></div>}
-                                {item.language_impact && <div className="text-sm"><span className="font-bold text-muted-foreground">Language Impact:</span> <span className="text-foreground/90">{item.language_impact}</span></div>}
-                                {item.comfort_level && <div className="text-sm"><span className="font-bold text-muted-foreground">Comfort Level:</span> <span className="text-foreground/90">{item.comfort_level}</span></div>}
-                                {item.impact && <div className="text-sm"><span className="font-bold text-muted-foreground">Impact:</span> <span className="text-foreground/90">{item.impact}</span></div>}
-                                {item.questions_asked && <div className="text-sm"><span className="font-bold text-muted-foreground">Questions:</span> <span className="text-foreground/90">{item.questions_asked}</span></div>}
-                                {item.exploration && <div className="text-sm"><span className="font-bold text-muted-foreground">Exploration:</span> <span className="text-foreground/90">{item.exploration}</span></div>}
-                                {item.understanding_depth && <div className="text-sm"><span className="font-bold text-muted-foreground">Understanding Depth:</span> <span className="text-foreground/90">{item.understanding_depth}</span></div>}
-                                {item.analysis && <div className="text-sm text-foreground/90">{item.analysis}</div>}
+                    {/* Hide Final Score card for mentorship */}
+                    {!isMentorship && (
+                        <GlassCard className="flex flex-col items-center justify-center text-center bg-gradient-to-b from-primary/10 to-transparent">
+                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Final Score</span>
+                            <div className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-br from-blue-400 to-indigo-500">
+                                {data.executive_summary.final_score || data.meta.overall_grade}
                             </div>
-                        </div>
-                    ))}
+                        </GlassCard>
+                    )}
                 </div>
-            </GlassCard>
-        )}
+            )}
 
-        {/* BEHAVIOURAL & EQ */}
-        {data.pattern_summary && (
-            <GlassCard className="border-l-4 border-l-blue-500 shadow-md">
-                <SectionHeader icon={Brain} title="Behavioural Pattern Summary" colorClass="text-blue-500" bgClass="bg-blue-500/10" />
-                <p className="text-xl font-medium leading-relaxed text-foreground/90">{data.pattern_summary}</p>
-            </GlassCard>
-        )}
-
-        <div className="grid lg:grid-cols-2 gap-8">
-            <div className="space-y-8 flex flex-col">
-                {data.eq_analysis && <EQAnalysisSection items={data.eq_analysis} />}
-                {data.turning_points && data.turning_points.length > 0 && (
-                    <GlassCard>
-                        <SectionHeader icon={History} title="Turning Points Detected" colorClass="text-amber-500" bgClass="bg-amber-500/10" />
-                        <div className="space-y-4">
-                            {data.turning_points.map((tp, i) => (
-                                <div key={i} className="flex flex-col gap-2 p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 shadow-sm">
-                                    <span className="text-xs font-bold text-amber-600 uppercase tracking-widest">{tp.timestamp}</span>
-                                    <p className="text-sm text-foreground/90 leading-relaxed font-medium">{tp.point}</p>
-                                </div>
-                            ))}
+            {/* NEW: COACHING STYLE PROFILE */}
+            {data.coaching_style && (
+                <div className={`bg-gradient-to-r ${isMentorship ? 'from-purple-500/10 to-pink-500/5' : 'from-emerald-500/10 to-teal-500/5'} rounded-3xl p-1 shadow-sm`}>
+                    <GlassCard className="border-none shadow-none m-0 bg-background/60 backdrop-blur-sm">
+                        <SectionHeader icon={Award} title={isMentorship ? "Mentorship Style" : "Coaching Style Profile"} colorClass={isMentorship ? "text-purple-500" : "text-emerald-500"} bgClass={isMentorship ? "bg-purple-500/10" : "bg-emerald-500/10"} />
+                        <div className="flex flex-col md:flex-row gap-6 items-center">
+                            <div className={`bg-background rounded-2xl p-6 border ${isMentorship ? 'border-purple-500/20' : 'border-emerald-500/20'} text-center md:w-1/3 shrink-0 shadow-sm`}>
+                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-2">Primary Style</span>
+                                <div className={`text-2xl lg:text-3xl font-black ${isMentorship ? 'text-purple-500' : 'text-emerald-500'} uppercase tracking-wide`}>{data.coaching_style.primary_style}</div>
+                            </div>
+                            <p className="text-lg lg:text-xl text-foreground/90 leading-relaxed font-medium italic">"{data.coaching_style.description}"</p>
                         </div>
                     </GlassCard>
-                )}
-            </div>
-            <div className="space-y-8 flex flex-col">
-                {data.behaviour_analysis && <BehaviourAnalysisSection items={data.behaviour_analysis} />}
-            </div>
-        </div>
-
-        {/* STRENGTHS & MISSED OPPORTUNITIES */}
-        <div className="grid lg:grid-cols-3 md:grid-cols-2 gap-6">
-            {(data.strengths_and_improvements?.strengths || []).length > 0 && (
-                <GlassCard>
-                    <SectionHeader icon={CheckCircle2} title="Key Strengths" colorClass="text-emerald-500" bgClass="bg-emerald-500/10" />
-                    <ul className="space-y-3">
-                        {(data.strengths_and_improvements?.strengths || []).map((s, i) => (
-                            <li key={i} className="flex gap-3 text-sm text-foreground/90 bg-emerald-500/5 p-3 rounded-lg border border-emerald-500/10">
-                                <Check className="w-4 h-4 text-emerald-500 mt-0.5" /> {s}
-                            </li>
-                        ))}
-                    </ul>
-                </GlassCard>
+                </div>
             )}
 
-            {((data.strengths_and_improvements?.missed_opportunities || []).length > 0 || (data.missed_opportunities || []).length > 0) && (
-                <GlassCard>
-                    <SectionHeader icon={AlertTriangle} title="Missed Opportunities" colorClass="text-amber-500" bgClass="bg-amber-500/10" />
-                    <ul className="space-y-3">
-                        {(data.strengths_and_improvements?.missed_opportunities || data.missed_opportunities || []).map((s, i) => (
-                            <li key={i} className="flex gap-3 text-sm text-foreground/90 bg-amber-500/5 p-3 rounded-lg border border-amber-500/10">
-                                <X className="w-4 h-4 text-amber-500 mt-0.5" /> {s}
-                            </li>
-                        ))}
-                    </ul>
-                </GlassCard>
-            )}
-
-            {data.ideal_questions && data.ideal_questions.length > 0 && (
-                <GlassCard className="lg:col-span-1 md:col-span-2">
-                    <SectionHeader icon={MessageSquare} title="Ideal Coaching Questions" colorClass="text-indigo-500" bgClass="bg-indigo-500/10" />
-                    <ul className="space-y-4">
-                        {data.ideal_questions.map((q, i) => (
-                            <li key={i} className="text-sm font-medium text-foreground/80 italic pl-4 border-l-2 border-indigo-500/40">"{q}"</li>
-                        ))}
-                    </ul>
-                </GlassCard>
-            )}
-        </div>
-
-        {/* ACTION PLAN & FOLLOW UP */}
-        <div className="grid lg:grid-cols-2 gap-6">
-            {data.action_plan && (
-                <GlassCard className="border-t-4 border-t-purple-500">
-                    <SectionHeader icon={Activity} title="Action Plan" colorClass="text-purple-500" bgClass="bg-purple-500/10" />
-                    <div className="space-y-4 mb-6 text-sm">
-                        <div className="flex justify-between bg-purple-500/5 p-3 rounded-lg border border-purple-500/10">
-                            <span className="font-bold text-purple-600">Owner</span>
-                            <span className="font-medium">{data.action_plan.owner}</span>
-                        </div>
-                        <div className="flex justify-between bg-purple-500/5 p-3 rounded-lg border border-purple-500/10">
-                            <span className="font-bold text-purple-600">Timeline</span>
-                            <span className="font-medium">{data.action_plan.timeline}</span>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4">
-                        <div>
-                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-2">Specific Actions</span>
-                            <ul className="space-y-2">
-                                {data.action_plan.specific_actions?.map((action, i) => (
-                                    <li key={i} className="flex gap-3 text-sm text-foreground/90">
-                                        <div className="w-5 h-5 rounded-full bg-purple-500/20 text-purple-600 flex items-center justify-center text-xs shrink-0 mt-0.5 font-bold">{i + 1}</div>
-                                        {action}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-
-                        {data.action_plan.success_indicators && data.action_plan.success_indicators.length > 0 && (
-                            <div className="pt-4 border-t border-border/50">
-                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-2">Success Indicators</span>
-                                <ul className="space-y-2 text-sm text-foreground/80">
-                                    {data.action_plan.success_indicators.map((ind, i) => (
-                                        <li key={i} className="flex gap-2 items-center"><Check className="w-4 h-4 text-emerald-500" /> {ind}</li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-                    </div>
-                </GlassCard>
-            )}
-
-            {data.follow_up_strategy && (
-                <GlassCard className="border-t-4 border-t-blue-500">
-                    <SectionHeader icon={TrendingUp} title="Follow-Up Strategy" colorClass="text-blue-500" bgClass="bg-blue-500/10" />
+            {/* MENTORSHIP-SPECIFIC SECTIONS */}
+            {isMentorship && data.mentorship_observations && data.mentorship_observations.length > 0 && (
+                <GlassCard className="border-l-4 border-l-purple-500">
+                    <SectionHeader icon={BookOpen} title="Mentorship Observations" colorClass="text-purple-500" bgClass="bg-purple-500/10" />
                     <div className="space-y-6">
-                        <div className="bg-blue-500/5 p-4 rounded-xl border border-blue-500/10">
-                            <span className="text-xs font-bold text-blue-600 uppercase tracking-widest block mb-1">Review Cadence</span>
-                            <p className="font-medium text-foreground">{data.follow_up_strategy.review_cadence}</p>
-                        </div>
-
-                        {data.follow_up_strategy.metrics_to_track && data.follow_up_strategy.metrics_to_track.length > 0 && (
-                            <div>
-                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-2">Metrics to Track</span>
-                                <div className="flex flex-col gap-2">
-                                    {data.follow_up_strategy.metrics_to_track.map((metric, i) => (
-                                        <div key={i} className="p-3 bg-background rounded-lg border border-border text-sm flex items-center gap-3 shadow-sm">
-                                            <BarChart className="w-4 h-4 text-blue-500 shrink-0" /> <span className="font-medium text-foreground/90">{metric}</span>
+                        {data.mentorship_observations.map((obs, i) => (
+                            <div key={i} className="p-5 rounded-xl bg-purple-500/5 border border-purple-500/10">
+                                <h3 className="font-bold text-lg text-purple-600 mb-3">{obs.observation}</h3>
+                                <div className="space-y-3">
+                                    {obs.evidence_quote && (
+                                        <div className="flex gap-3 text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg border-l-4 border-purple-500/20 italic">
+                                            <Quote className="w-4 h-4 shrink-0 opacity-50" /> "{obs.evidence_quote}"
                                         </div>
-                                    ))}
+                                    )}
+                                    <div className="flex gap-2 text-sm">
+                                        <span className="font-bold text-xs text-purple-600 uppercase tracking-wider shrink-0">Significance:</span>
+                                        <span className="text-foreground/80">{obs.significance}</span>
+                                    </div>
+                                    {obs.suggestion && (
+                                        <div className="flex gap-2 items-start mt-2 p-3 bg-emerald-500/5 rounded-lg border border-emerald-500/10">
+                                            <Lightbulb className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                                            <span className="text-sm text-foreground/90 font-medium">{obs.suggestion}</span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
-                        )}
-
-                        <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-border shadow-sm">
-                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-1">Accountability Method</span>
-                            <p className="text-sm text-foreground/90 font-medium leading-relaxed">{data.follow_up_strategy.accountability_method}</p>
-                        </div>
+                        ))}
                     </div>
                 </GlassCard>
             )}
-        </div>
 
-        {/* FINAL EVALUATION */}
-        {data.final_evaluation && (
-            <div className="bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent p-1 rounded-3xl mt-4">
-                <div className="bg-card rounded-[22px] p-6 lg:p-8 border border-indigo-500/20 shadow-sm">
-                    <div className="flex flex-col md:flex-row gap-6 lg:gap-8 justify-between items-start mb-8 pb-8 border-b border-border/50">
-                        <div>
-                            <div className="flex items-center gap-3 mb-4">
-                                <Flag className="w-8 h-8 text-indigo-500" />
-                                <h2 className="text-2xl font-black text-foreground uppercase tracking-wide">Final Evaluation</h2>
+            {isMentorship && data.learning_takeaways && data.learning_takeaways.length > 0 && (
+                <GlassCard>
+                    <SectionHeader icon={Zap} title="Key Learning Takeaways" colorClass="text-amber-500" bgClass="bg-amber-500/10" />
+                    <div className="space-y-3">
+                        {data.learning_takeaways.map((takeaway, i) => (
+                            <div key={i} className="flex gap-3 text-sm text-foreground/90 bg-amber-500/5 p-4 rounded-lg border border-amber-500/10">
+                                <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-600 flex items-center justify-center text-xs shrink-0 font-bold">{i + 1}</div>
+                                <span className="font-medium leading-relaxed">{takeaway}</span>
                             </div>
-                            <p className="text-muted-foreground max-w-2xl text-lg">Readiness assessment and long-term development pathway.</p>
-                        </div>
-                        <div className="flex gap-4 self-stretch md:self-auto">
-                            {data.final_evaluation.maturity_rating && (
-                                <div className="bg-indigo-500/10 px-6 py-4 rounded-2xl border border-indigo-500/20 text-center flex-1">
-                                    <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest block mb-1 whitespace-nowrap">Maturity Rating</span>
-                                    <span className="text-3xl font-black text-indigo-500">{data.final_evaluation.maturity_rating}</span>
-                                </div>
-                            )}
-                            {data.final_evaluation.readiness_level && (
-                                <div className="bg-purple-500/10 px-6 py-4 rounded-2xl border border-purple-500/20 text-center flex-1">
-                                    <span className="text-xs font-bold text-purple-600 uppercase tracking-widest block mb-1 whitespace-nowrap">Readiness</span>
-                                    <span className="text-2xl lg:text-3xl font-black text-purple-500">{data.final_evaluation.readiness_level}</span>
-                                </div>
-                            )}
-                        </div>
+                        ))}
                     </div>
+                </GlassCard>
+            )}
 
-                    <div className="grid md:grid-cols-2 gap-8">
-                        {data.final_evaluation.immediate_focus && data.final_evaluation.immediate_focus.length > 0 && (
+            {isMentorship && data.reflection_prompts && data.reflection_prompts.length > 0 && (
+                <GlassCard className="bg-gradient-to-br from-indigo-500/5 to-purple-500/5">
+                    <SectionHeader icon={Brain} title="Reflection Prompts" colorClass="text-indigo-500" bgClass="bg-indigo-500/10" />
+                    <p className="text-sm text-muted-foreground mb-4">Take a moment to reflect on these questions to deepen your learning:</p>
+                    <div className="space-y-4">
+                        {data.reflection_prompts.map((prompt, i) => (
+                            <div key={i} className="p-4 rounded-xl bg-background border border-indigo-500/10 text-foreground/90 italic font-medium text-base leading-relaxed pl-5 border-l-4 border-l-indigo-500/40">
+                                "{prompt}"
+                            </div>
+                        ))}
+                    </div>
+                </GlassCard>
+            )}
+
+            <div className="grid lg:grid-cols-2 gap-8">
+                {/* SECTION 2: Goal Attainment — hide score for mentorship */}
+                {data.goal_attainment && (
+                    <GlassCard>
+                        <SectionHeader icon={Target} title="Goal Attainment" colorClass="text-blue-500" bgClass="bg-blue-500/10" />
+                        {!isMentorship && (
+                            <div className="flex items-center justify-between mb-6 pb-6 border-b border-border/50">
+                                <span className="text-lg font-bold text-foreground">Attainment Score</span>
+                                <span className="text-4xl font-black text-blue-500">{data.goal_attainment.score}</span>
+                            </div>
+                        )}
+                        <div className="space-y-6">
                             <div>
-                                <span className="text-sm font-bold text-foreground uppercase tracking-widest block mb-4 flex items-center gap-2">
-                                    <Target className="w-4 h-4 text-primary" /> Immediate Focus Areas
-                                </span>
-                                <ul className="space-y-3">
-                                    {data.final_evaluation.immediate_focus.map((focus, i) => (
-                                        <li key={i} className="flex gap-3 p-3 bg-background border border-border rounded-xl text-sm font-medium shadow-sm">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" /> <span className="text-foreground/90">{focus}</span>
+                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-2">Expectation vs Reality</span>
+                                <p className="text-sm text-foreground/90 leading-relaxed">{data.goal_attainment.expectation_vs_reality}</p>
+                            </div>
+                            {data.goal_attainment.primary_gaps && data.goal_attainment.primary_gaps.length > 0 && (
+                                <div>
+                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-2">Primary Gaps</span>
+                                    <ul className="space-y-2">
+                                        {data.goal_attainment.primary_gaps.map((gap, i) => (
+                                            <li key={i} className="flex gap-2 text-sm text-foreground/80">
+                                                <X className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" /> {gap}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                            {data.goal_attainment.observation_focus && data.goal_attainment.observation_focus.length > 0 && (
+                                <div>
+                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-2">Observation Focus</span>
+                                    <div className="flex flex-wrap gap-2">
+                                        {data.goal_attainment.observation_focus.map((focus, i) => (
+                                            <span key={i} className="px-2 py-1 bg-slate-500/10 text-slate-600 rounded text-xs font-medium border border-slate-500/20">{focus}</span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </GlassCard>
+                )}
+
+                {/* NEW: Context and Questioning Analysis */}
+                {data.meta.scenario && <ScenarioContextSection scenario={data.meta.scenario} />}
+                {data.question_analysis && <QuestionsSection analysis={data.question_analysis} />}
+                {data.detailed_analysis && <DetailedAnalysisSection items={data.detailed_analysis} />}
+
+                {/* SCORECARD AND HEAT MAP — hidden for mentorship */}
+                {!isMentorship && (
+                    <div className="flex flex-col gap-8">
+                        {data.heat_map && data.heat_map.length > 0 && (
+                            <GlassCard>
+                                <SectionHeader icon={Activity} title="Competency Heat Map & Spider Graph" colorClass="text-purple-500" bgClass="bg-purple-500/10" />
+                                <div className="grid lg:grid-cols-2 gap-8 items-center">
+                                    <CompetencyHeatMap items={data.heat_map} />
+                                    <div className="bg-muted/10 rounded-3xl p-4 border border-border/50">
+                                        <SkillRadarChart items={data.heat_map} />
+                                    </div>
+                                </div>
+                            </GlassCard>
+                        )}
+                        {data.scorecard && (
+                            <ScorecardSection items={data.scorecard} />
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* DEEP DIVE ANALYSIS */}
+            {data.deep_dive_analysis && data.deep_dive_analysis.length > 0 && (
+                <GlassCard>
+                    <SectionHeader icon={BookOpen} title="Deep Dive Analysis" colorClass="text-indigo-500" bgClass="bg-indigo-500/10" />
+                    <div className="grid xl:grid-cols-2 gap-6">
+                        {data.deep_dive_analysis.map((item, i) => (
+                            <div key={i} className="bg-background rounded-xl p-5 border border-border shadow-sm">
+                                <h3 className="font-bold text-lg text-indigo-600 mb-4 pb-2 border-b border-indigo-500/10">{item.topic}</h3>
+                                <div className="space-y-3">
+                                    {item.tone && <div className="text-sm"><span className="font-bold text-muted-foreground">Tone:</span> <span className="text-foreground/90">{item.tone}</span></div>}
+                                    {item.language_impact && <div className="text-sm"><span className="font-bold text-muted-foreground">Language Impact:</span> <span className="text-foreground/90">{item.language_impact}</span></div>}
+                                    {item.comfort_level && <div className="text-sm"><span className="font-bold text-muted-foreground">Comfort Level:</span> <span className="text-foreground/90">{item.comfort_level}</span></div>}
+                                    {item.impact && <div className="text-sm"><span className="font-bold text-muted-foreground">Impact:</span> <span className="text-foreground/90">{item.impact}</span></div>}
+                                    {item.questions_asked && <div className="text-sm"><span className="font-bold text-muted-foreground">Questions:</span> <span className="text-foreground/90">{item.questions_asked}</span></div>}
+                                    {item.exploration && <div className="text-sm"><span className="font-bold text-muted-foreground">Exploration:</span> <span className="text-foreground/90">{item.exploration}</span></div>}
+                                    {item.understanding_depth && <div className="text-sm"><span className="font-bold text-muted-foreground">Understanding Depth:</span> <span className="text-foreground/90">{item.understanding_depth}</span></div>}
+                                    {item.analysis && <div className="text-sm text-foreground/90">{item.analysis}</div>}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </GlassCard>
+            )}
+
+            {/* BEHAVIOURAL & EQ */}
+            {data.pattern_summary && (
+                <GlassCard className="border-l-4 border-l-blue-500 shadow-md">
+                    <SectionHeader icon={Brain} title="Behavioural Pattern Summary" colorClass="text-blue-500" bgClass="bg-blue-500/10" />
+                    <p className="text-xl font-medium leading-relaxed text-foreground/90">{data.pattern_summary}</p>
+                </GlassCard>
+            )}
+
+            <div className="grid lg:grid-cols-2 gap-8">
+                <div className="space-y-8 flex flex-col">
+                    {data.eq_analysis && <EQAnalysisSection items={data.eq_analysis} />}
+                    {data.turning_points && data.turning_points.length > 0 && (
+                        <GlassCard>
+                            <SectionHeader icon={History} title="Turning Points Detected" colorClass="text-amber-500" bgClass="bg-amber-500/10" />
+                            <div className="space-y-4">
+                                {data.turning_points.map((tp, i) => (
+                                    <div key={i} className="flex flex-col gap-2 p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 shadow-sm">
+                                        <span className="text-xs font-bold text-amber-600 uppercase tracking-widest">{tp.timestamp}</span>
+                                        <p className="text-sm text-foreground/90 leading-relaxed font-medium">{tp.point}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </GlassCard>
+                    )}
+                </div>
+                <div className="space-y-8 flex flex-col">
+                    {data.behaviour_analysis && <BehaviourAnalysisSection items={data.behaviour_analysis} />}
+                </div>
+            </div>
+
+            {/* STRENGTHS & MISSED OPPORTUNITIES */}
+            <div className="grid lg:grid-cols-3 md:grid-cols-2 gap-6">
+                {(data.strengths_and_improvements?.strengths || []).length > 0 && (
+                    <GlassCard>
+                        <SectionHeader icon={CheckCircle2} title="Key Strengths" colorClass="text-emerald-500" bgClass="bg-emerald-500/10" />
+                        <ul className="space-y-3">
+                            {(data.strengths_and_improvements?.strengths || []).map((s, i) => (
+                                <li key={i} className="flex gap-3 text-sm text-foreground/90 bg-emerald-500/5 p-3 rounded-lg border border-emerald-500/10">
+                                    <Check className="w-4 h-4 text-emerald-500 mt-0.5" /> {s}
+                                </li>
+                            ))}
+                        </ul>
+                    </GlassCard>
+                )}
+
+                {((data.strengths_and_improvements?.missed_opportunities || []).length > 0 || (data.missed_opportunities || []).length > 0) && (
+                    <GlassCard>
+                        <SectionHeader icon={AlertTriangle} title={isMentorship ? "Growth Areas" : "Missed Opportunities"} colorClass="text-amber-500" bgClass="bg-amber-500/10" />
+                        <ul className="space-y-3">
+                            {(data.strengths_and_improvements?.missed_opportunities || data.missed_opportunities || []).map((s, i) => (
+                                <li key={i} className="flex gap-3 text-sm text-foreground/90 bg-amber-500/5 p-3 rounded-lg border border-amber-500/10">
+                                    <X className="w-4 h-4 text-amber-500 mt-0.5" /> {s}
+                                </li>
+                            ))}
+                        </ul>
+                    </GlassCard>
+                )}
+
+                {data.ideal_questions && data.ideal_questions.length > 0 && (
+                    <GlassCard className="lg:col-span-1 md:col-span-2">
+                        <SectionHeader icon={MessageSquare} title="Ideal Coaching Questions" colorClass="text-indigo-500" bgClass="bg-indigo-500/10" />
+                        <ul className="space-y-4">
+                            {data.ideal_questions.map((q, i) => (
+                                <li key={i} className="text-sm font-medium text-foreground/80 italic pl-4 border-l-2 border-indigo-500/40">"{q}"</li>
+                            ))}
+                        </ul>
+                    </GlassCard>
+                )}
+            </div>
+
+            {/* ACTION PLAN & FOLLOW UP */}
+            <div className="grid lg:grid-cols-2 gap-6">
+                {data.action_plan && (
+                    <GlassCard className="border-t-4 border-t-purple-500">
+                        <SectionHeader icon={Activity} title="Action Plan" colorClass="text-purple-500" bgClass="bg-purple-500/10" />
+                        <div className="space-y-4 mb-6 text-sm">
+                            <div className="flex justify-between bg-purple-500/5 p-3 rounded-lg border border-purple-500/10">
+                                <span className="font-bold text-purple-600">Owner</span>
+                                <span className="font-medium">{data.action_plan.owner}</span>
+                            </div>
+                            <div className="flex justify-between bg-purple-500/5 p-3 rounded-lg border border-purple-500/10">
+                                <span className="font-bold text-purple-600">Timeline</span>
+                                <span className="font-medium">{data.action_plan.timeline}</span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-2">Specific Actions</span>
+                                <ul className="space-y-2">
+                                    {data.action_plan.specific_actions?.map((action, i) => (
+                                        <li key={i} className="flex gap-3 text-sm text-foreground/90">
+                                            <div className="w-5 h-5 rounded-full bg-purple-500/20 text-purple-600 flex items-center justify-center text-xs shrink-0 mt-0.5 font-bold">{i + 1}</div>
+                                            {action}
                                         </li>
                                     ))}
                                 </ul>
                             </div>
-                        )}
-                        {data.final_evaluation.long_term_suggestion && (
-                            <div className="bg-primary/5 p-6 rounded-2xl border border-primary/10 flex flex-col justify-center">
-                                <span className="text-sm font-bold text-primary uppercase tracking-widest block mb-3 flex items-center gap-2">
-                                    <TrendingUp className="w-4 h-4 text-primary" /> Long-Term Suggestion
-                                </span>
-                                <p className="text-foreground/90 leading-relaxed italic text-base lg:text-lg font-medium">{data.final_evaluation.long_term_suggestion}</p>
+
+                            {data.action_plan.success_indicators && data.action_plan.success_indicators.length > 0 && (
+                                <div className="pt-4 border-t border-border/50">
+                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-2">Success Indicators</span>
+                                    <ul className="space-y-2 text-sm text-foreground/80">
+                                        {data.action_plan.success_indicators.map((ind, i) => (
+                                            <li key={i} className="flex gap-2 items-center"><Check className="w-4 h-4 text-emerald-500" /> {ind}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    </GlassCard>
+                )}
+
+                {data.follow_up_strategy && (
+                    <GlassCard className="border-t-4 border-t-blue-500">
+                        <SectionHeader icon={TrendingUp} title="Follow-Up Strategy" colorClass="text-blue-500" bgClass="bg-blue-500/10" />
+                        <div className="space-y-6">
+                            <div className="bg-blue-500/5 p-4 rounded-xl border border-blue-500/10">
+                                <span className="text-xs font-bold text-blue-600 uppercase tracking-widest block mb-1">Review Cadence</span>
+                                <p className="font-medium text-foreground">{data.follow_up_strategy.review_cadence}</p>
                             </div>
-                        )}
+
+                            {data.follow_up_strategy.metrics_to_track && data.follow_up_strategy.metrics_to_track.length > 0 && (
+                                <div>
+                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-2">Metrics to Track</span>
+                                    <div className="flex flex-col gap-2">
+                                        {data.follow_up_strategy.metrics_to_track.map((metric, i) => (
+                                            <div key={i} className="p-3 bg-background rounded-lg border border-border text-sm flex items-center gap-3 shadow-sm">
+                                                <BarChart className="w-4 h-4 text-blue-500 shrink-0" /> <span className="font-medium text-foreground/90">{metric}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-border shadow-sm">
+                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest block mb-1">Accountability Method</span>
+                                <p className="text-sm text-foreground/90 font-medium leading-relaxed">{data.follow_up_strategy.accountability_method}</p>
+                            </div>
+                        </div>
+                    </GlassCard>
+                )}
+            </div>
+
+            {/* FINAL EVALUATION */}
+            {data.final_evaluation && (
+                <div className="bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent p-1 rounded-3xl mt-4">
+                    <div className="bg-card rounded-[22px] p-6 lg:p-8 border border-indigo-500/20 shadow-sm">
+                        <div className="flex flex-col md:flex-row gap-6 lg:gap-8 justify-between items-start mb-8 pb-8 border-b border-border/50">
+                            <div>
+                                <div className="flex items-center gap-3 mb-4">
+                                    <Flag className="w-8 h-8 text-indigo-500" />
+                                    <h2 className="text-2xl font-black text-foreground uppercase tracking-wide">{isMentorship ? 'Growth Assessment' : 'Final Evaluation'}</h2>
+                                </div>
+                                <p className="text-muted-foreground max-w-2xl text-lg">{isMentorship ? 'Growth journey assessment and development pathway.' : 'Readiness assessment and long-term development pathway.'}</p>
+                            </div>
+                            <div className="flex gap-4 self-stretch md:self-auto">
+                                {/* Hide numerical maturity rating for mentorship */}
+                                {!isMentorship && data.final_evaluation.maturity_rating && (
+                                    <div className="bg-indigo-500/10 px-6 py-4 rounded-2xl border border-indigo-500/20 text-center flex-1">
+                                        <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest block mb-1 whitespace-nowrap">Maturity Rating</span>
+                                        <span className="text-3xl font-black text-indigo-500">{data.final_evaluation.maturity_rating}</span>
+                                    </div>
+                                )}
+                                {/* For mentorship, show descriptive maturity text */}
+                                {isMentorship && data.final_evaluation.maturity_rating && (
+                                    <div className="bg-purple-500/10 px-6 py-4 rounded-2xl border border-purple-500/20 text-center flex-1">
+                                        <span className="text-xs font-bold text-purple-600 uppercase tracking-widest block mb-1 whitespace-nowrap">Growth Stage</span>
+                                        <span className="text-lg font-black text-purple-500">{data.final_evaluation.maturity_rating}</span>
+                                    </div>
+                                )}
+                                {data.final_evaluation.readiness_level && (
+                                    <div className="bg-purple-500/10 px-6 py-4 rounded-2xl border border-purple-500/20 text-center flex-1">
+                                        <span className="text-xs font-bold text-purple-600 uppercase tracking-widest block mb-1 whitespace-nowrap">Readiness</span>
+                                        <span className="text-2xl lg:text-3xl font-black text-purple-500">{data.final_evaluation.readiness_level}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-8">
+                            {data.final_evaluation.immediate_focus && data.final_evaluation.immediate_focus.length > 0 && (
+                                <div>
+                                    <span className="text-sm font-bold text-foreground uppercase tracking-widest block mb-4 flex items-center gap-2">
+                                        <Target className="w-4 h-4 text-primary" /> Immediate Focus Areas
+                                    </span>
+                                    <ul className="space-y-3">
+                                        {data.final_evaluation.immediate_focus.map((focus, i) => (
+                                            <li key={i} className="flex gap-3 p-3 bg-background border border-border rounded-xl text-sm font-medium shadow-sm">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" /> <span className="text-foreground/90">{focus}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                            {data.final_evaluation.long_term_suggestion && (
+                                <div className="bg-primary/5 p-6 rounded-2xl border border-primary/10 flex flex-col justify-center">
+                                    <span className="text-sm font-bold text-primary uppercase tracking-widest block mb-3 flex items-center gap-2">
+                                        <TrendingUp className="w-4 h-4 text-primary" /> Long-Term Suggestion
+                                    </span>
+                                    <p className="text-foreground/90 leading-relaxed italic text-base lg:text-lg font-medium">{data.final_evaluation.long_term_suggestion}</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
-        )}
-    </div>
-)
+            )}
+        </div>
+    )
+}

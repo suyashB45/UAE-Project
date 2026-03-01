@@ -463,9 +463,10 @@ Categorize each question and specify optimal timing in the conversation.
         }
 
 
-def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None, mode="coaching", scenario_type=None, ai_character="alex", simulation_id=None):
+def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None, mode="coaching", scenario_type=None, ai_character="alex", simulation_id=None, session_mode=None):
     """
     Generate report data using SCENARIO-SPECIFIC structures.
+    For mentorship sessions (session_mode='mentorship'), generates qualitative feedback only (no numerical scores).
     """
     # Auto-detect scenario type if not provided
     if not scenario_type:
@@ -488,7 +489,8 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         "overall_grade": "N/A",
         "summary": "Session analysis.",
         "scenario_type": scenario_type,
-        "scenario": scenario  # Pass full scenario text to frontend
+        "scenario": scenario,  # Pass full scenario text to frontend
+        "session_mode": session_mode or "skill_assessment"  # Pass session_mode to frontend
     }
 
     if not user_msgs:
@@ -535,7 +537,81 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
     else:
         scorecard_dimensions = "Empathy & Respect, Clarity with Facts, Coaching Questions, Ownership Creation, Action Plan Quality, Follow-up Discipline"
 
-    unified_instruction = f"""
+    # =====================================================================
+    # MENTORSHIP MODE: Qualitative-only prompt (no numerical scores)
+    # =====================================================================
+    is_mentorship = (session_mode == "mentorship" or mode == "mentorship")
+    
+    if is_mentorship:
+        unified_instruction = f"""
+### MENTORSHIP SESSION FEEDBACK GUIDELINES
+**Objective**: Provide qualitative, observational feedback on the mentorship session. This is NOT an assessment — do NOT provide numerical scores.
+**Focus**: What the user learned from observing/participating, key takeaways, and reflective growth areas.
+**Language Tone**: Warm, encouraging, and growth-oriented. Use phrases like "I noticed...", "A key takeaway is...", "Consider reflecting on...".
+**Evidence Requirement**: Ground observations in actual transcript moments.
+**IMPORTANT**: Do NOT include any numerical scores, ratings, or grades anywhere in the response.
+
+**JSON Response Schema**:
+{{
+  "meta": {{ "scenario_id": "{scenario_type}", "outcome_status": "Completed", "overall_grade": "Mentorship Complete", "summary": "Brief summary of the mentorship session.", "session_mode": "mentorship" }},
+  "type": "mentorship_report",
+  "executive_summary": {{
+    "snapshot": "Overview of the mentorship experience.", "final_score": "Mentorship Complete", "strengths_summary": "What went well in the session.", "improvements_summary": "Areas for continued growth.", "outcome_summary": "The key outcome and learning from this mentorship session."
+  }},
+  "coaching_style": {{
+    "primary_style": "Observational | Collaborative | Guided | Exploratory",
+    "description": "Description of the mentorship dynamic observed."
+  }},
+  "deep_dive_analysis": [
+    {{"topic": "Topic Area", "tone": "Observed Tone", "impact": "Impact Description", "analysis": "Detailed qualitative analysis."}}
+  ],
+  "mentorship_observations": [
+    {{
+      "observation": "What was observed in the session",
+      "evidence_quote": "Verbatim quote from the transcript",
+      "significance": "Why this matters for growth",
+      "suggestion": "How to build on this in future interactions"
+    }}
+  ],
+  "learning_takeaways": [
+    "Key learning point 1",
+    "Key learning point 2",
+    "Key learning point 3"
+  ],
+  "reflection_prompts": [
+    "Reflective question 1 to help the user internalize learnings",
+    "Reflective question 2",
+    "Reflective question 3"
+  ],
+  "pattern_summary": "Overview of the most notable behavioral pattern in the session.",
+  "behaviour_analysis": [
+    {{
+      "behavior": "Observed Behavior",
+      "quote": "Verbatim transcript quote",
+      "insight": "What this behavior reveals",
+      "impact": "Positive/Neutral/Growth Area",
+      "improved_approach": "Alternative approach to try next time"
+    }}
+  ],
+  "eq_analysis": [
+    {{ "nuance": "Emotional nuance observed", "observation": "Evidence from transcript", "suggestion": "How to build on this" }}
+  ],
+  "strengths_and_improvements": {{
+    "strengths": ["Strength 1", "Strength 2"], "missed_opportunities": ["Growth area 1", "Growth area 2"]
+  }},
+  "action_plan": {{
+    "specific_actions": ["Growth action 1"], "owner": "User", "timeline": "Next 30 days", "success_indicators": ["Indicator 1"]
+  }},
+  "follow_up_strategy": {{
+    "review_cadence": "Suggested frequency", "metrics_to_track": ["Qualitative metric 1"], "accountability_method": "Method"
+  }},
+  "final_evaluation": {{
+    "readiness_level": "Descriptive level (e.g., Emerging, Developing, Proficient)", "maturity_rating": "Descriptive (e.g., Growth Mindset Demonstrated)", "immediate_focus": ["Focus area 1"], "long_term_suggestion": "Long-term growth direction."
+  }}
+}}
+"""
+    else:
+        unified_instruction = f"""
 ### PERFORMANCE ANALYSIS GUIDELINES
 **Objective**: Provide a professional, structured assessment of the User's performance in the provided transcript.
 **Focus**: Constructive feedback and actionable insights.

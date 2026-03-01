@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Clock, User, Bot, CheckCircle2, PlayCircle, Calendar, Trophy } from "lucide-react"
+import { Clock, User, Bot, CheckCircle2, PlayCircle, Calendar, Trophy, Sparkles, BookOpen } from "lucide-react"
 import { motion } from "framer-motion"
 
 import Navigation from "../components/landing/Navigation"
@@ -19,6 +19,7 @@ interface SessionItem {
     topic: string
     completed: boolean
     fit_score: number
+    session_mode: string
 }
 
 export default function SessionHistory() {
@@ -61,15 +62,16 @@ export default function SessionHistory() {
 
                 // Map backend format to frontend interface
                 const mappedSessions = data.map((s: any) => ({
-                    id: s.session_id || s.id,
-                    session_id: s.session_id || s.id,
-                    created_at: s.date || s.created_at,
+                    id: s.session_id,
+                    session_id: s.session_id,
+                    created_at: s.date,
                     role: s.role,
                     ai_role: s.ai_role,
                     scenario: s.title || s.scenario || "Untitled Scenario",
                     topic: s.scenario_type || "General",
-                    completed: s.completed,
-                    fit_score: s.score || s.fit_score || 0
+                    completed: s.completed ?? false,
+                    fit_score: s.score || 0,
+                    session_mode: s.session_mode || "skill_assessment"
                 }))
 
                 setSessions(mappedSessions)
@@ -181,6 +183,16 @@ export default function SessionHistory() {
                                         <span className="text-primary bg-primary/10 px-2 py-1 rounded-md border border-primary/20">
                                             {session.topic.toUpperCase()}
                                         </span>
+                                        {/* Session Mode Badge */}
+                                        {session.session_mode === 'mentorship' ? (
+                                            <span className="text-purple-500 bg-purple-500/10 px-2 py-1 rounded-md flex items-center gap-1.5 border border-purple-500/20">
+                                                <BookOpen className="w-3.5 h-3.5" /> Mentorship
+                                            </span>
+                                        ) : (
+                                            <span className="text-blue-500 bg-blue-500/10 px-2 py-1 rounded-md flex items-center gap-1.5 border border-blue-500/20">
+                                                <Sparkles className="w-3.5 h-3.5" /> Assessment
+                                            </span>
+                                        )}
                                     </div>
 
                                     <div>
@@ -209,11 +221,19 @@ export default function SessionHistory() {
                                 </div>
 
                                 <div className="flex items-center gap-6 justify-between md:justify-end md:flex-col lg:flex-row border-t md:border-t-0 border-border/50 pt-4 md:pt-0">
-                                    {session.completed && session.fit_score > 0 && (
+                                    {session.completed && session.session_mode !== 'mentorship' && session.fit_score > 0 && (
                                         <div className="text-right">
                                             <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider mb-1">Score</div>
                                             <div className={`text-2xl sm:text-3xl font-black ${session.fit_score >= 7 ? 'text-emerald-500' : session.fit_score >= 5 ? 'text-amber-500' : 'text-rose-500'}`}>
                                                 {session.fit_score.toFixed(1)}<span className="text-sm text-muted-foreground font-semibold ml-0.5">/10</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {session.completed && session.session_mode === 'mentorship' && (
+                                        <div className="text-right">
+                                            <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider mb-1">Status</div>
+                                            <div className="text-lg font-black text-purple-500">
+                                                ✓ Complete
                                             </div>
                                         </div>
                                     )}

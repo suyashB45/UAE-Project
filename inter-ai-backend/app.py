@@ -714,7 +714,25 @@ def get_history():
         # Sort by created_at desc (newest first)
         user_sessions.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         
-        return jsonify(user_sessions)
+        # Format response with only the fields needed for history display
+        history_items = []
+        for s in user_sessions:
+            score = s.get("score") or 0
+            if not score and s.get("report_data"):
+                score = s["report_data"].get("meta", {}).get("fit_score", 0)
+            history_items.append({
+                "session_id": s.get("id"),
+                "date": s.get("created_at"),
+                "role": s.get("role"),
+                "ai_role": s.get("ai_role"),
+                "title": s.get("title"),
+                "scenario": s.get("scenario"),
+                "scenario_type": s.get("scenario_type", "custom"),
+                "session_mode": s.get("session_mode", "skill_assessment"),
+                "completed": s.get("completed", False),
+                "score": score,
+            })
+        return jsonify(history_items)
         
     except Exception as e:
         print(f"[ERROR] Failed to fetch history: {e}")
@@ -1001,7 +1019,7 @@ def start_session():
     mode_map = {
         "coaching": "evaluation",      # Coaching scenarios get scores
         "negotiation": "evaluation",   # Negotiation scenarios get scores
-        "mentorship": "evaluation",    # Mentorship scenarios get scores
+        "mentorship": "mentorship",    # Mentorship scenarios are qualitative (no scores)
         "reflection": "coaching",      # Reflection scenarios are qualitative
         "custom": "coaching"           # Custom scenarios default to coaching style
     }
@@ -1192,7 +1210,8 @@ def complete_session(session_id: str):
                 fw_display,
                 mode=mode,
                 scenario_type=scenario_type,
-                ai_character=sess.get("ai_character", "alex")
+                ai_character=sess.get("ai_character", "alex"),
+                session_mode=sess.get("session_mode")
             )
             sess["report_data"] = data
         except Exception as e:
@@ -1355,6 +1374,10 @@ def get_report_data(session_id: str):
         response["transcript"] = sess["transcript"]
         response["scenario"] = sess["scenario"] or "No context available."
         response["scenario_type"] = sess.get("scenario_type", response.get("scenario_type", "custom"))
+        # Inject session_mode so frontend can distinguish assessment from mentorship
+        if "meta" not in response:
+            response["meta"] = {}
+        response["meta"]["session_mode"] = sess.get("session_mode", "skill_assessment")
         return jsonify(response)
         
     # Generate new data if not present
@@ -1377,7 +1400,8 @@ def get_report_data(session_id: str):
             fw_arg,
             mode=mode,
             scenario_type=scenario_type,
-            ai_character=sess.get("ai_character", "alex")
+            ai_character=sess.get("ai_character", "alex"),
+            session_mode=sess.get("session_mode")
         )
         sess["report_data"] = data
         
@@ -1386,6 +1410,10 @@ def get_report_data(session_id: str):
         response["scenario"] = sess["scenario"] or "No context available."
         response["scenario_type"] = scenario_type or data.get("scenario_type", "custom")
         response["ai_character"] = sess.get("ai_character", "alex")
+        # Inject session_mode so frontend can distinguish assessment from mentorship
+        if "meta" not in response:
+            response["meta"] = {}
+        response["meta"]["session_mode"] = sess.get("session_mode", "skill_assessment")
         return jsonify(response)
     except Exception as e:
         import traceback
