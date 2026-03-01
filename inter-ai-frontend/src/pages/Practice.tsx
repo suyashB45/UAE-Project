@@ -29,7 +29,7 @@ const DEFAULT_SCENARIOS = [
                 description: "Coach a sincere employee who keeps missing targets. Improve performance without demotivating the employee.",
                 ai_role: "Sales Associate",
                 user_role: "Store Manager",
-                scenario: "CONTEXT: Aamir is sincere and well-liked, but his results have been consistently below target for the last 3 months. You need to coach him to understand the gap, identify root causes, and agree on a clear improvement plan.\n\nYOUR OBJECTIVES:\n1. Create a safe, respectful tone\n2. Use facts to discuss the performance gap\n3. Explore reasons behind the gap\n4. Agree on 2-3 actions and a follow-up plan",
+                scenario: "CONTEXT: The employee is sincere and well-liked, but their results have been consistently below target for the last 3 months. You need to coach them to understand the gap, identify root causes, and agree on a clear improvement plan.\n\nYOUR OBJECTIVES:\n1. Create a safe, respectful tone\n2. Use facts to discuss the performance gap\n3. Explore reasons behind the gap\n4. Agree on 2-3 actions and a follow-up plan",
                 icon: "Users",
                 output_type: "scored_report",
                 mode: "evaluation",
@@ -42,7 +42,7 @@ const DEFAULT_SCENARIOS = [
                 description: "Address behavior issues with a top performer without losing performance momentum.",
                 ai_role: "Top Sales Performer",
                 user_role: "Team Leader",
-                scenario: "CONTEXT: Riya is a top performer whose sales numbers consistently exceed target. However, multiple team members report she is sarcastic, dismissive, and undermines colleagues in front of customers. You must address the behavior without losing performance momentum.\n\nYOUR OBJECTIVES:\n1. Maintain psychological safety\n2. Address behavior clearly using examples\n3. Separate performance from behavior\n4. Create ownership and behavior shift commitment",
+                scenario: "CONTEXT: The employee is a top performer whose sales numbers consistently exceed target. However, multiple team members report they are sarcastic, dismissive, and undermine colleagues in front of customers. You must address the behavior without losing performance momentum.\n\nYOUR OBJECTIVES:\n1. Maintain psychological safety\n2. Address behavior clearly using examples\n3. Separate performance from behavior\n4. Create ownership and behavior shift commitment",
                 icon: "AlertTriangle",
                 output_type: "scored_report",
                 mode: "evaluation",
@@ -55,7 +55,7 @@ const DEFAULT_SCENARIOS = [
                 description: "Re-engage a once-dependable team member who has shown a decline in initiative.",
                 ai_role: "Disengaged Team Member",
                 user_role: "Manager",
-                scenario: "CONTEXT: Arjun was once a dependable team member, but over the last 6-8 weeks, his energy has dropped. He completes tasks but shows no initiative and avoids extra responsibilities. There are no performance complaints—just a decline in engagement.\n\nYOUR OBJECTIVES:\n1. Create psychological safety\n2. Explore underlying causes without assumptions\n3. Avoid an accusatory tone\n4. Help Arjun reconnect to purpose or ownership",
+                scenario: "CONTEXT: The team member was once dependable, but over the last 6-8 weeks, their energy has dropped. They complete tasks but show no initiative and avoid extra responsibilities. There are no performance complaints—just a decline in engagement.\n\nYOUR OBJECTIVES:\n1. Create psychological safety\n2. Explore underlying causes without assumptions\n3. Avoid an accusatory tone\n4. Help the team member reconnect to purpose or ownership",
                 icon: "Users",
                 output_type: "scored_report",
                 mode: "evaluation",
@@ -81,7 +81,7 @@ const DEFAULT_SCENARIOS = [
                 description: "Resolve visible tension and breakdown in communication between two team members.",
                 ai_role: "Conflicted Team Members",
                 user_role: "Team Manager",
-                scenario: "CONTEXT: Rohan and Meera's communication has broken down; each claims the other is causing delays and mistakes. Tension is now visible to other team members, and you have called both into a joint meeting to resolve it.\n\nYOUR OBJECTIVES:\n1. Establish neutrality\n2. Prevent blame escalation\n3. Identify the root cause\n4. Create a practical working agreement",
+                scenario: "CONTEXT: Two team members' communication has broken down; each claims the other is causing delays and mistakes. Tension is now visible to other team members, and you have called both into a joint meeting to resolve it.\n\nYOUR OBJECTIVES:\n1. Establish neutrality\n2. Prevent blame escalation\n3. Identify the root cause\n4. Create a practical working agreement",
                 icon: "Users",
                 output_type: "scored_report",
                 mode: "evaluation",
@@ -105,9 +105,9 @@ const DEFAULT_SCENARIOS = [
             {
                 title: "The Overloaded Manager",
                 description: "Address a pattern of poor ownership with a capable team member.",
-                ai_role: "Priya (Team Member)",
+                ai_role: "Team Member",
                 user_role: "Manager",
-                scenario: "CONTEXT: You are overwhelmed as critical tasks often end up back on your desk because Priya, a capable team member, rarely takes full ownership. You need to address this pattern and redistribute responsibility.\n\nYOUR OBJECTIVES:\n1. Clarify expectations\n2. Avoid blame\n3. Define ownership boundaries\n4. Establish an accountability structure",
+                scenario: "CONTEXT: You are overwhelmed as critical tasks often end up back on your desk because a capable team member rarely takes full ownership. You need to address this pattern and redistribute responsibility.\n\nYOUR OBJECTIVES:\n1. Clarify expectations\n2. Avoid blame\n3. Define ownership boundaries\n4. Establish an accountability structure",
                 icon: "GraduationCap",
                 output_type: "scored_report",
                 mode: "evaluation",
@@ -118,9 +118,9 @@ const DEFAULT_SCENARIOS = [
             {
                 title: "Resistance to the New System",
                 description: "Understand and manage subtle resistance to organizational change.",
-                ai_role: "Vikram (Experienced Member)",
+                ai_role: "Experienced Team Member",
                 user_role: "Team Lead",
-                scenario: "CONTEXT: Vikram, an experienced team member, is subtly resisting a new organizational system, frequently calling it unnecessary. His attitude is beginning to influence others.\n\nYOUR OBJECTIVES:\n1. Avoid confrontation\n2. Understand resistance drivers\n3. Reinforce the purpose of the change\n4. Encourage ownership in adaptation",
+                scenario: "CONTEXT: An experienced team member is subtly resisting a new organizational system, frequently calling it unnecessary. Their attitude is beginning to influence others.\n\nYOUR OBJECTIVES:\n1. Avoid confrontation\n2. Understand resistance drivers\n3. Reinforce the purpose of the change\n4. Encourage ownership in adaptation",
                 icon: "AlertTriangle",
                 output_type: "scored_report",
                 mode: "evaluation",
@@ -131,9 +131,9 @@ const DEFAULT_SCENARIOS = [
             {
                 title: "Why Didn't I Get Promoted?",
                 description: "Provide developmental feedback to a high performer not selected for promotion.",
-                ai_role: "Neha (High Performer)",
+                ai_role: "High Performer",
                 user_role: "Manager",
-                scenario: "CONTEXT: Neha, a high performer, applied for a promotion but was not selected. She has requested a meeting to understand why she was missing from the selection.\n\nYOUR OBJECTIVES:\n1. Acknowledge the emotional impact\n2. Provide specific developmental feedback\n3. Avoid vague generalizations\n4. Offer a forward-looking growth plan",
+                scenario: "CONTEXT: A high performer applied for a promotion but was not selected. They have requested a meeting to understand why they were not chosen.\n\nYOUR OBJECTIVES:\n1. Acknowledge the emotional impact\n2. Provide specific developmental feedback\n3. Avoid vague generalizations\n4. Offer a forward-looking growth plan",
                 icon: "GraduationCap",
                 output_type: "scored_report",
                 mode: "evaluation",
@@ -144,9 +144,9 @@ const DEFAULT_SCENARIOS = [
             {
                 title: "Burnout Behind the Smile",
                 description: "Sustainably explore signs of exhaustion and burnout with a high performer.",
-                ai_role: "Sana (Exhausted Performer)",
+                ai_role: "Exhausted Performer",
                 user_role: "Manager",
-                scenario: "CONTEXT: Sana remains high-performing, but you have noticed signs of exhaustion, such as shorter responses and avoiding extra tasks. You suspect early signs of burnout.\n\nYOUR OBJECTIVES:\n1. Observe without accusing\n2. Create psychological safety\n3. Explore wellbeing sensitively\n4. Protect sustainable performance",
+                scenario: "CONTEXT: The employee remains high-performing, but you have noticed signs of exhaustion, such as shorter responses and avoiding extra tasks. You suspect early signs of burnout.\n\nYOUR OBJECTIVES:\n1. Observe without accusing\n2. Create psychological safety\n3. Explore wellbeing sensitively\n4. Protect sustainable performance",
                 icon: "Users",
                 output_type: "scored_report",
                 mode: "evaluation",
@@ -158,22 +158,144 @@ const DEFAULT_SCENARIOS = [
     }
 ]
 
-// Derived Mentorship category: flip roles from the primary coaching scenarios
-const MENTORSHIP_CATEGORY = {
-    name: "Mentorship Examples",
-    color: "from-emerald-400 to-emerald-600",
-    scenarios: DEFAULT_SCENARIOS[0].scenarios.map((s: any) => ({
-        ...s,
-        title: `${s.title} — Mentorship`,
-        // Flip roles
-        user_role: s.ai_role,
-        ai_role: s.user_role,
-        // Mark as mentorship so UI and backend can handle differently
-        scenario_type: "mentorship",
-        session_mode: "mentorship",
-        mode: "mentorship"
-    }))
-}
+const MENTORSHIP_SCENARIOS = [
+    {
+        name: "Mentorship Simulations",
+        color: "from-blue-500 to-indigo-600",
+        scenarios: [
+            {
+                title: "Seeking Growth Amidst Struggle",
+                description: "As a Sales Associate, navigate a performance review with your manager to find a path forward without losing your job.",
+                ai_role: "Store Manager",
+                user_role: "Sales Associate",
+                scenario: "CONTEXT: You are a sincere and dedicated employee, but you've missed your targets for 3 months. You are meeting with your Manager. You need to be honest about your struggles while demonstrating your commitment to improve.\n\nYOUR OBJECTIVES:\n1. Openly acknowledge the performance gap\n2. Share specific hurdles you are facing\n3. Ask for specific coaching or resources\n4. Commit to a realistic improvement plan",
+                icon: "Users",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "mentorship_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "MENT-01-PERF-001"
+            },
+            {
+                title: "Managing Your Reputation",
+                description: "As a Top Performer, learn to receive feedback about your 'toxic' attitude and pivot toward leadership behavior.",
+                ai_role: "Team Leader",
+                user_role: "Top Sales Performer",
+                scenario: "CONTEXT: Your sales numbers are the best in the company, but your Team Leader has called a meeting to discuss your 'attitude.' You often feel frustrated by others' lack of pace, but you need to hear the feedback without becoming defensive.\n\nYOUR OBJECTIVES:\n1. Listen to feedback without interrupting\n2. Acknowledge the impact of your tone on others\n3. Seek advice on how to mentor instead of criticize\n4. Agree on behavior changes to protect team culture",
+                icon: "AlertTriangle",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "mentorship_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "MENT-02-BEH-001"
+            },
+            {
+                title: "Breaking the Silence",
+                description: "As a disengaged employee, communicate your lack of motivation to your manager to find a new sense of purpose.",
+                ai_role: "Manager",
+                user_role: "Disengaged Team Member",
+                scenario: "CONTEXT: You've been coasting for two months. You're doing the bare minimum because you feel stuck. Your manager has noticed. Use this meeting to express why you've lost your spark and what would re-energize you.\n\nYOUR OBJECTIVES:\n1. Honestly express your current state of mind\n2. Identify what parts of the role no longer fulfill you\n3. Propose a new project or area of interest\n4. Collaborate on a plan to rebuild engagement",
+                icon: "Users",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "mentorship_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "MENT-03-MOT-001"
+            },
+            {
+                title: "Advocating for the Team",
+                description: "As a Sales Manager, present a data-driven case to your Regional Director to adjust unrealistic targets.",
+                ai_role: "Regional Director",
+                user_role: "Sales Manager",
+                scenario: "CONTEXT: You've been handed a 35% increase in targets that you know is impossible. You need to convince your Regional Director to reconsider by providing evidence, rather than just complaining.\n\nYOUR OBJECTIVES:\n1. Present market and inventory data clearly\n2. Stay professional despite potential pressure\n3. Propose a 'stretch but reachable' alternative\n4. Secure a commitment for more resources or adjusted goals",
+                icon: "UserCog",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "mentorship_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "MENT-04-COM-001"
+            },
+            {
+                title: "Navigating Peer Conflict",
+                description: "As one of the conflicted parties, work with your manager to resolve a breakdown in communication with a colleague.",
+                ai_role: "Team Manager",
+                user_role: "Conflicted Team Member",
+                scenario: "CONTEXT: You and a colleague are at odds. You feel they are causing the delays, but you are now in a joint meeting with your Manager. You need to move past blame to find a professional solution.\n\nYOUR OBJECTIVES:\n1. State your perspective using 'I' statements\n2. Listen to your colleague's side with neutrality\n3. Identify the specific bottleneck in the workflow\n4. Agree to a new communication protocol",
+                icon: "Users",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "mentorship_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "MENT-05-CON-001"
+            },
+            {
+                title: "Recovering Client Trust",
+                description: "As an Account Manager, handle a high-stakes meeting with a frustrated client to save the account.",
+                ai_role: "Frustrated Key Client",
+                user_role: "Account Manager",
+                scenario: "CONTEXT: Your team missed a delivery. The client is furious and on the verge of leaving. You need to manage their emotions while protecting the company's reputation and providing a solution.\n\nYOUR OBJECTIVES:\n1. De-escalate the client's anger through active listening\n2. Avoid making promises you can't keep\n3. Outline a concrete recovery plan\n4. Secure a follow-up meeting to confirm resolution",
+                icon: "ShoppingCart",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "mentorship_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "MENT-06-CUST-001"
+            },
+            {
+                title: "Stepping into Ownership",
+                description: "As a Team Member, learn to stop escalating tasks and start taking full accountability for your projects.",
+                ai_role: "Manager",
+                user_role: "Team Member",
+                scenario: "CONTEXT: You are capable, but you often hand tasks back to your manager when they get difficult. Your manager wants to talk about 'ownership.' You need to understand how to manage up and take the lead.\n\nYOUR OBJECTIVES:\n1. Acknowledge the pattern of shifting tasks back\n2. Identify why you hesitate to make final decisions\n3. Ask for clear decision-making boundaries\n4. Commit to a 'solution-first' reporting style",
+                icon: "GraduationCap",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "mentorship_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "MENT-07-LEAD-001"
+            },
+            {
+                title: "Adapting to Change",
+                description: "As an Experienced Team Member, discuss your concerns about a new system with your Lead to find a middle ground.",
+                ai_role: "Team Lead",
+                user_role: "Experienced Team Member",
+                scenario: "CONTEXT: You think the new system is a waste of time. You've been vocal about it. Your Team Lead wants to discuss your resistance. Use this to voice valid concerns while showing you're a team player.\n\nYOUR OBJECTIVES:\n1. Share specific technical concerns about the new system\n2. Avoid sounding 'anti-change' for the sake of it\n3. Offer to help pilot a more efficient version\n4. Agree to support the transition for the sake of the team",
+                icon: "AlertTriangle",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "mentorship_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "MENT-08-CHG-001"
+            },
+            {
+                title: "Processing the 'No'",
+                description: "As a High Performer, professionally handle being passed over for a promotion and get a roadmap for the next one.",
+                ai_role: "Manager",
+                user_role: "High Performer",
+                scenario: "CONTEXT: You didn't get the promotion you wanted. You are disappointed. You are meeting your manager to find out why and what you need to do to be the top candidate next time.\n\nYOUR OBJECTIVES:\n1. Manage your disappointment professionally\n2. Ask for specific, actionable skill gaps\n3. Request a mentor or training for those gaps\n4. Establish a 6-month review timeline for growth",
+                icon: "GraduationCap",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "mentorship_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "MENT-09-CAR-001"
+            },
+            {
+                title: "Admitting Burnout",
+                description: "As an Exhausted Performer, speak up about your mental health and workload before you hit a breaking point.",
+                ai_role: "Manager",
+                user_role: "Exhausted Performer",
+                scenario: "CONTEXT: You are burned out. You're still hitting numbers, but you're exhausted and starting to resent the work. Your manager has noticed you're quieter. You need to ask for help without appearing weak.\n\nYOUR OBJECTIVES:\n1. Describe your current workload and stress levels\n2. Propose a temporary adjustment to responsibilities\n3. Discuss sustainable working habits\n4. Reaffirm your commitment to the long-term mission",
+                icon: "Users",
+                output_type: "scored_report",
+                mode: "evaluation",
+                scenario_type: "mentorship_sim",
+                session_mode: "skill_assessment",
+                simulation_id: "MENT-10-WELL-001"
+            }
+        ]
+    }
+]
 
 
 export default function Practice() {
@@ -448,7 +570,7 @@ export default function Practice() {
                             </div>
                         </div>
 
-                        {(globalMode === "assessment" ? DEFAULT_SCENARIOS : [MENTORSHIP_CATEGORY]).map((category, idx) => (
+                        {(globalMode === "assessment" ? DEFAULT_SCENARIOS : MENTORSHIP_SCENARIOS).map((category, idx) => (
                             <div key={idx} className="space-y-6">
                                 <div className="flex items-center gap-4">
                                     <div className={`h-8 w-1 bg-gradient-to-b ${category.color} rounded-full`} />

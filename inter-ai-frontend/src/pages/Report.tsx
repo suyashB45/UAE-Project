@@ -629,13 +629,9 @@ const QuestionsSection = ({ analysis }: { analysis?: QuestionAnalysis }) => {
         <GlassCard className="border-l-4 border-l-primary">
             <SectionHeader icon={MessageSquare} title="Questions You Should Have Asked" colorClass="text-primary" bgClass="bg-primary/10" />
 
-            {/* Quality Score Summary */}
-            {analysis.question_quality_score && (
-                <div className="mb-6 p-4 rounded-xl bg-primary/5 border border-primary/10">
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Question Quality Score</span>
-                        <span className="text-2xl font-black text-primary">{analysis.question_quality_score}</span>
-                    </div>
+            {/* Quality Feedback Summary (no numerical scores) */}
+            {(analysis.question_quality_feedback || analysis.questioning_improvement_tip) && (
+                <div className="mb-6 p-4 rounded-xl bg-purple-500/5 border border-purple-500/10">
                     {analysis.question_quality_feedback && (
                         <p className="text-sm text-foreground/80 mb-2">{analysis.question_quality_feedback}</p>
                     )}
@@ -935,7 +931,7 @@ const SimulationView = ({ data }: { data: SimulationReportData }) => {
 
                 {/* NEW: Context and Questioning Analysis */}
                 {data.meta.scenario && <ScenarioContextSection scenario={data.meta.scenario} />}
-                {data.question_analysis && <QuestionsSection analysis={data.question_analysis} />}
+                {isMentorship && data.question_analysis && <QuestionsSection analysis={data.question_analysis} />}
                 {data.detailed_analysis && <DetailedAnalysisSection items={data.detailed_analysis} />}
 
                 {/* SCORECARD AND HEAT MAP — hidden for mentorship */}

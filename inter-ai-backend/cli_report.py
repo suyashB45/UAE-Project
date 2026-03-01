@@ -514,7 +514,18 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         "SIM-08-CHG-001": "Non-Defensive Listening, Curiosity & Exploration, Emotional Validation, Change Purpose Framing, Ownership Activation, Influence Management",
         "SIM-09-CAR-001": "Emotional Validation, Clarity of Developmental Feedback, Specific Behaviour Examples, Future-Focused Framing, Growth Roadmap Definition, Motivation Reinforcement",
         "SIM-10-WELL-001": "Observational Sensitivity, Psychological Safety Creation, Emotional Validation, Avoidance of Premature Solutions, Sustainable Adjustment Planning, Accountability Balance",
-        "SIM-11-MENTOR-001": "Psychological Safety, Active Listening, Empowerment Level, Radical Candor, Accountability Mapping, Long-term Vision"
+        "SIM-11-MENTOR-001": "Psychological Safety, Active Listening, Empowerment Level, Radical Candor, Accountability Mapping, Long-term Vision",
+        # Mentorship Simulations (user as subordinate)
+        "MENT-01-PERF-001": "Self-Awareness, Honest Communication, Help-Seeking Ability, Commitment to Growth, Specificity of Action Plan, Emotional Composure",
+        "MENT-02-BEH-001": "Active Listening, Non-Defensiveness, Self-Reflection, Willingness to Change, Empathy Toward Others, Commitment to Behavior Shift",
+        "MENT-03-MOT-001": "Honest Self-Expression, Vulnerability, Root Cause Identification, Initiative in Problem-Solving, Collaborative Engagement, Future Orientation",
+        "MENT-04-COM-001": "Data-Driven Argumentation, Professional Composure, Assertiveness, Solution Orientation, Credibility Building, Stakeholder Empathy",
+        "MENT-05-CON-001": "I-Statement Usage, Active Listening, Neutrality Under Pressure, Bottleneck Identification, Collaborative Problem-Solving, Commitment to New Protocols",
+        "MENT-06-CUST-001": "Active Listening, Emotional De-escalation, Promise Management, Recovery Plan Clarity, Follow-up Commitment, Professional Credibility",
+        "MENT-07-LEAD-001": "Self-Awareness of Patterns, Decision-Making Confidence, Upward Communication, Ownership Mindset, Solution-First Thinking, Accountability Commitment",
+        "MENT-08-CHG-001": "Constructive Feedback, Open-Mindedness, Team Player Attitude, Pilot Willingness, Technical Concern Specificity, Adaptability",
+        "MENT-09-CAR-001": "Emotional Regulation, Growth Mindset, Feedback Receptiveness, Proactive Planning, Mentorship Seeking, Timeline Commitment",
+        "MENT-10-WELL-001": "Vulnerability & Honesty, Workload Articulation, Boundary Setting, Sustainable Habit Proposal, Long-term Commitment, Help-Seeking Ability"
     }
 
     # Scenario-type generic dimensions (fallback if no simulation_id)
@@ -526,7 +537,8 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         "customer_service": "Emotional Stability, Accountability Framing, Clarification Quality, Non-Defensive Communication, Solution Speed, Professionalism",
         "career_development": "Aspiration Alignment, Skill Gap Identification, Narrative Building, Growth Mindset, Roadmap Clarity, Motivation Reinforcement",
         "wellness": "Psychological Safety, Empathetic Listening, Validation Quality, Stress Source ID, Support Resource Alignment, Wellness Commitment",
-        "mentorship": "Psychological Safety, Socratic Questioning, Accountability Transfer, Active Listening, Radical Candor, Long-term Vision"
+        "mentorship": "Psychological Safety, Socratic Questioning, Accountability Transfer, Active Listening, Radical Candor, Long-term Vision",
+        "mentorship_sim": "Self-Awareness, Honest Communication, Active Listening, Growth Mindset, Help-Seeking Ability, Commitment to Action"
     }
     
     # Select dimensions: 1. Specific Simulation, 2. Scenario Type, 3. Default Coaching
@@ -1415,11 +1427,12 @@ class DashboardPDF(FPDF):
         scenario_labels = {
             "coaching": "COACHING EFFICACY",
             "coaching_sim": "COACHING EFFICACY",
+            "mentorship_sim": "MENTORSHIP EFFICACY",
             "negotiation": "NEGOTIATION EFFICACY",
             "reflection": "LEARNING INSIGHTS",
             "custom": "GOAL ATTAINMENT"
         }
-        icon_map = {"coaching": "[C]", "coaching_sim": "[C]", "negotiation": "[N]", "reflection": "[R]", "custom": "[*]"}
+        icon_map = {"coaching": "[C]", "coaching_sim": "[C]", "mentorship_sim": "[M]", "negotiation": "[N]", "reflection": "[R]", "custom": "[*]"}
         
         icon = icon_map.get(scenario_type, "[*]")
         label = scenario_labels.get(scenario_type, "COACHING EFFICACY")

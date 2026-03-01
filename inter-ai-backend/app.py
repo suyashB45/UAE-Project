@@ -1010,6 +1010,7 @@ def start_session():
             "reflection": "practice",
             "mentorship": "mentorship",
             "coaching_sim": "skill_assessment",
+            "mentorship_sim": "skill_assessment",
             "custom": "practice"
         }
         session_mode = mode_mapping.get(scenario_type, "practice")
@@ -1020,6 +1021,7 @@ def start_session():
         "coaching": "evaluation",      # Coaching scenarios get scores
         "negotiation": "evaluation",   # Negotiation scenarios get scores
         "mentorship": "mentorship",    # Mentorship scenarios are qualitative (no scores)
+        "mentorship_sim": "evaluation", # Mentorship simulations get scores (user as subordinate)
         "reflection": "coaching",      # Reflection scenarios are qualitative
         "custom": "coaching"           # Custom scenarios default to coaching style
     }
