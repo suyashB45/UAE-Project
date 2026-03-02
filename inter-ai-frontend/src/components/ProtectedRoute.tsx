@@ -15,12 +15,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
         // Check current session
         const checkAuth = async () => {
             try {
-                // TEMPORARY BYPASS
-                if (localStorage.getItem('temp_bypass') === 'true') {
-                    setIsAuthenticated(true);
-                    setLoading(false);
-                    return;
-                }
+
 
                 const { data: { session } } = await supabase.auth.getSession();
                 setIsAuthenticated(!!session);
@@ -36,11 +31,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
         // Listen for auth state changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: string, session: any) => {
-            if (localStorage.getItem('temp_bypass') === 'true') {
-                setIsAuthenticated(true);
-            } else {
-                setIsAuthenticated(!!session);
-            }
+            setIsAuthenticated(!!session);
             setLoading(false);
         });
 

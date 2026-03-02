@@ -19,17 +19,7 @@ const Login: React.FC = () => {
         setLoading(true);
 
         try {
-            // TEMPORARY BYPASS
-            if (email === "admin" && password === "admin") {
-                localStorage.setItem('temp_bypass', 'true');
-                localStorage.setItem('user', JSON.stringify({
-                    id: "bypass-user-id",
-                    email: "admin@coact.ai",
-                }));
-                toast.success(`Welcome back (Bypass Mode)!`);
-                navigate('/practice');
-                return;
-            }
+
 
             const { data, error } = await supabase.auth.signInWithPassword({
                 email,
