@@ -890,7 +890,12 @@ def get_history():
         for s in user_sessions:
             score = s.get("score") or 0
             if not score and s.get("report_data"):
-                score = s["report_data"].get("meta", {}).get("fit_score", 0)
+                grade_str = s["report_data"].get("meta", {}).get("overall_grade", "")
+                if grade_str and "/" in str(grade_str):
+                    try:
+                        score = float(str(grade_str).split("/")[0].strip())
+                    except (ValueError, IndexError):
+                        score = 0
             history_items.append({
                 "session_id": s.get("id"),
                 "date": s.get("created_at"),
@@ -1685,7 +1690,7 @@ def get_sessions():
                 "completed": sess["completed"],
                 "report_file": sess["report_file"],
                 "framework": sess["framework"],
-                "fit_score": sess["report_data"].get("meta", {}).get("fit_score", 0) if sess["report_data"] else 0
+                "score": (lambda rd: float(str(rd.get("meta", {}).get("overall_grade", "0")).split("/")[0].strip()) if rd and "/" in str(rd.get("meta", {}).get("overall_grade", "")) else 0)(sess.get("report_data", {}))
             })
         # Sort by created_at descending
         session_list.sort(key=lambda x: x["created_at"], reverse=True)

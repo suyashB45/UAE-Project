@@ -760,35 +760,29 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         # Create Chain
         chain_raw = prompt | llm
         
-        print(f" [INFO] Starting PARALLEL report generation (3 LLM calls)...", flush=True)
+        print(f" [INFO] Starting SEQUENTIAL report generation (3 LLM calls)...", flush=True)
         
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-            future_main = executor.submit(
-                lambda: chain_raw.invoke({
-                    "system_prompt": system_prompt,
-                    "conversation": full_conversation
-                })
-            )
-            
-            future_character = executor.submit(
-                analyze_character_traits,
-                transcript, role, ai_role, scenario, scenario_type
-            )
-            
-            future_questions = executor.submit(
-                analyze_questions_missed,
-                transcript, role, ai_role, scenario, scenario_type
-            )
-            
-            t1 = dt.datetime.now()
-            raw_response = future_main.result()
-            t2 = dt.datetime.now()
-            print(f" [PERF] Main Report Generation took: {(t2-t1).total_seconds():.2f}s")
-            
-            character_analysis = future_character.result()
-            question_analysis = future_questions.result()
+        t1 = dt.datetime.now()
+        raw_response = chain_raw.invoke({
+            "system_prompt": system_prompt,
+            "conversation": full_conversation
+        })
+        t2 = dt.datetime.now()
+        print(f" [PERF] Main Report Generation took: {(t2-t1).total_seconds():.2f}s")
         
-        print(f" [SUCCESS] All analyses completed in parallel!", flush=True)
+        character_analysis = analyze_character_traits(
+            transcript, role, ai_role, scenario, scenario_type
+        )
+        t3 = dt.datetime.now()
+        print(f" [PERF] Character Analysis took: {(t3-t2).total_seconds():.2f}s")
+        
+        question_analysis = analyze_questions_missed(
+            transcript, role, ai_role, scenario, scenario_type
+        )
+        t4 = dt.datetime.now()
+        print(f" [PERF] Question Analysis took: {(t4-t3).total_seconds():.2f}s")
+        
+        print(f" [SUCCESS] All analyses completed sequentially in {(t4-t1).total_seconds():.2f}s!", flush=True)
         
         # Robust JSON parsing
         json_text = raw_response.content if hasattr(raw_response, 'content') else str(raw_response)

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Mic, Square, ArrowLeft, Clock, User, Bot, Send, Sparkles, History, X, Loader2 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { getApiUrl } from "@/lib/api"
+import { supabase } from "@/lib/supabase"
 
 interface TranscriptMessage {
     role: "user" | "assistant"
@@ -172,17 +173,28 @@ export default function Conversation() {
             const audio = new Audio(url)
             aiAudioRef.current = audio
 
-            audio.onended = () => {
-                setIsAiSpeaking(false)
-                URL.revokeObjectURL(url)
-            }
+            // Wait for audio to finish playing before resolving
+            // This ensures sequential playback in multi-character mode
+            await new Promise<void>((resolve) => {
+                audio.onended = () => {
+                    setIsAiSpeaking(false)
+                    URL.revokeObjectURL(url)
+                    resolve()
+                }
 
-            audio.onerror = () => {
-                setIsAiSpeaking(false)
-                console.error("Audio playback error")
-            }
+                audio.onerror = () => {
+                    setIsAiSpeaking(false)
+                    console.error("Audio playback error")
+                    URL.revokeObjectURL(url)
+                    resolve()
+                }
 
-            await audio.play()
+                audio.play().catch(() => {
+                    setIsAiSpeaking(false)
+                    URL.revokeObjectURL(url)
+                    resolve()
+                })
+            })
 
         } catch (error) {
             console.error("TTS Error:", error)
@@ -388,10 +400,19 @@ export default function Conversation() {
             const controller = new AbortController()
             abortControllerRef.current = controller
 
+            // Get auth token for session persistence
+            const { data: { session: authSession } } = await supabase.auth.getSession()
+            const authHeaders: Record<string, string> = {
+                'Content-Type': 'application/json'
+            }
+            if (authSession?.access_token) {
+                authHeaders['Authorization'] = `Bearer ${authSession.access_token}`
+            }
+
             // Call backend chat API
             const response = await fetch(getApiUrl(`/api/session/${sessionId}/chat`), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders,
                 body: JSON.stringify({
                     message,
                     audio_url: lastAudioUrl // Send the audio we just saved
@@ -480,9 +501,18 @@ export default function Conversation() {
         stopRecording()
 
         try {
+            // Get auth token for session persistence
+            const { data: { session: authSession } } = await supabase.auth.getSession()
+            const authHeaders: Record<string, string> = {}
+            if (authSession?.access_token) {
+                authHeaders['Authorization'] = `Bearer ${authSession.access_token}`
+            }
+
             // Call backend to complete session and generate report
             await fetch(getApiUrl(`/api/session/${sessionId}/complete`), {
-                method: 'POST'
+                method: 'POST',
+                headers: authHeaders
+
             })
 
             // Update localStorage for offline reference
@@ -883,8 +913,8 @@ export default function Conversation() {
                                                             {part.char} <div className={`w-6 h-[1px] ${part.color === 'pink' ? 'bg-pink-500/30' : 'bg-blue-500/30'}`}></div>
                                                         </div>
                                                         <div className={`p-4 rounded-2xl max-w-[85%] text-sm leading-relaxed backdrop-blur-md border shadow-lg rounded-tl-sm ${part.color === 'pink'
-                                                                ? 'bg-pink-500/10 border-pink-500/20 text-foreground'
-                                                                : 'bg-blue-500/10 border-blue-500/20 text-foreground'
+                                                            ? 'bg-pink-500/10 border-pink-500/20 text-foreground'
+                                                            : 'bg-blue-500/10 border-blue-500/20 text-foreground'
                                                             }`}>
                                                             {part.text}
                                                         </div>

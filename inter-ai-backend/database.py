@@ -46,10 +46,15 @@ def save_session_to_db(session_data):
             "updated_at": datetime.now().isoformat()
         }
         
-        # We need to extract the score manually
+        # Extract score from overall_grade (e.g., "7/10" -> 7.0)
         score = None
         if report_data_val and "meta" in report_data_val:
-            score = report_data_val["meta"].get("fit_score")
+            grade_str = report_data_val["meta"].get("overall_grade", "")
+            if grade_str and "/" in str(grade_str):
+                try:
+                    score = float(str(grade_str).split("/")[0].strip())
+                except (ValueError, IndexError):
+                    score = None
         data_to_insert["score"] = score
         
         # Upsert the session record in practice_history

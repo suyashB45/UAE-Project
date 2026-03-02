@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import Navigation from "../components/landing/Navigation"
 import { getApiUrl } from "../lib/api"
+import { supabase } from "../lib/supabase"
 
 const ICON_MAP: any = {
     Users, ShoppingCart, GraduationCap, AlertTriangle, DollarSign, UserCog
@@ -363,9 +364,18 @@ export default function Practice() {
             setIsStartingSession(true)
             setStartingScenarioTitle(data.title || 'custom')
             // Call backend to create session
+            // Get auth token for session persistence
+            const { data: { session: authSession } } = await supabase.auth.getSession()
+            const authHeaders: Record<string, string> = {
+                'Content-Type': 'application/json'
+            }
+            if (authSession?.access_token) {
+                authHeaders['Authorization'] = `Bearer ${authSession.access_token}`
+            }
+
             const response = await fetch(getApiUrl('/api/session/start'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders,
                 body: JSON.stringify({
                     role: data.role,
                     ai_role: data.ai_role,
