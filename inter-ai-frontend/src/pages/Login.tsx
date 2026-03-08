@@ -29,26 +29,23 @@ const Login: React.FC = () => {
             if (error) throw error;
 
             if (data.session) {
-                // Sync user with backend
-                const syncRes = await fetch(getApiUrl('/api/auth/sync'), {
+                const user = data.user;
+                localStorage.setItem('user', JSON.stringify({
+                    id: user?.id,
+                    email: user?.email,
+                }));
+
+                // Sync user with backend (non-blocking — don't fail login if backend is slow/down)
+                fetch(getApiUrl('/api/auth/sync'), {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${data.session.access_token}`,
                         'Content-Type': 'application/json'
                     }
-                });
+                }).catch(err => console.warn('Backend sync skipped:', err));
 
-                if (syncRes.ok) {
-                    const user = data.user;
-                    localStorage.setItem('user', JSON.stringify({
-                        id: user?.id,
-                        email: user?.email,
-                    }));
-                    toast.success(`Welcome back!`);
-                    navigate('/practice');
-                } else {
-                    throw new Error('Backend sync failed');
-                }
+                toast.success(`Welcome back!`);
+                navigate('/practice');
             }
         } catch (err: any) {
             console.error(err);
