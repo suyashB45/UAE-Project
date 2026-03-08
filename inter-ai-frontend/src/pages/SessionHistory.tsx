@@ -27,15 +27,43 @@ export default function SessionHistory() {
     const [sessions, setSessions] = useState<SessionItem[]>([])
     const [loading, setLoading] = useState(true)
     const [filter, setFilter] = useState<'all' | 'completed' | 'ongoing'>('all')
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
+        const getLocalSessions = (): SessionItem[] => {
+            const localSessions: SessionItem[] = []
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i)
+                if (key?.startsWith('session_')) {
+                    try {
+                        const raw = JSON.parse(localStorage.getItem(key) || '{}')
+                        if (raw.sessionId) {
+                            localSessions.push({
+                                id: raw.sessionId,
+                                session_id: raw.sessionId,
+                                created_at: raw.createdAt || new Date().toISOString(),
+                                role: raw.role || '',
+                                ai_role: raw.ai_role || '',
+                                scenario: raw.title || raw.scenario || 'Untitled Scenario',
+                                topic: raw.scenario_type || 'General',
+                                completed: raw.completed ?? false,
+                                fit_score: raw.score || 0,
+                                session_mode: raw.session_mode || 'skill_assessment'
+                            })
+                        }
+                    } catch { /* skip invalid entries */ }
+                }
+            }
+            localSessions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            return localSessions
+        }
+
         const fetchSessions = async () => {
             try {
                 // Get current user from Supabase
                 const { data: { user } } = await supabase.auth.getUser();
 
                 if (!user) {
-                    // Redirect if no authenticated user
                     navigate('/login');
                     return;
                 }
@@ -51,14 +79,22 @@ export default function SessionHistory() {
                 // Fetch from backend using authenticated endpoint
                 const res = await fetch(getApiUrl('/api/history'), {
                     headers: {
-                        'Authorization': `Bearer ${session.access_token}`,
-                        'Content-Type': 'application/json'
+                        'Authorization': `Bearer ${session.access_token}`
                     }
                 });
 
-                if (!res.ok) throw new Error('Failed to fetch sessions')
+                if (!res.ok) {
+                    const errBody = await res.text().catch(() => '')
+                    console.error(`History API returned ${res.status}: ${errBody}`)
+                    throw new Error(`Server error (${res.status})`)
+                }
 
                 const data = await res.json()
+
+                if (!Array.isArray(data)) {
+                    console.error('History API returned non-array:', data)
+                    throw new Error(data?.error || 'Unexpected response format')
+                }
 
                 // Map backend format to frontend interface
                 const mappedSessions = data.map((s: any) => ({
@@ -75,8 +111,17 @@ export default function SessionHistory() {
                 }))
 
                 setSessions(mappedSessions)
-            } catch (err) {
-                console.error("Failed to load sessions from API", err)
+                setError(null)
+            } catch (err: any) {
+                console.error("Failed to load sessions from API:", err)
+                // Fallback: load sessions from localStorage
+                const localSessions = getLocalSessions()
+                if (localSessions.length > 0) {
+                    setSessions(localSessions)
+                    setError(null)
+                } else {
+                    setError(err?.message || 'Failed to load session history')
+                }
             } finally {
                 setLoading(false)
             }
@@ -145,10 +190,16 @@ export default function SessionHistory() {
                         <div className="w-20 h-20 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-6 text-muted-foreground border border-border group-hover:bg-muted/80 transition-colors animate-breathe">
                             <Clock className="w-10 h-10" />
                         </div>
-                        <h3 className="text-2xl font-bold text-foreground mb-2">No Sessions Found</h3>
-                        <p className="text-muted-foreground mb-8 max-w-md mx-auto">You haven't started any training sessions yet. Launch a new scenario to get started.</p>
-                        <button onClick={() => navigate("/practice")} className="btn-ultra-modern btn-press px-8 py-3">
-                            Start New Session
+                        <h3 className="text-2xl font-bold text-foreground mb-2">
+                            {error ? 'Unable to Load History' : 'No Sessions Found'}
+                        </h3>
+                        <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+                            {error
+                                ? `There was a problem loading your sessions: ${error}. Please try refreshing the page.`
+                                : "You haven't started any training sessions yet. Launch a new scenario to get started."}
+                        </p>
+                        <button onClick={() => error ? window.location.reload() : navigate("/practice")} className="btn-ultra-modern btn-press px-8 py-3">
+                            {error ? 'Refresh Page' : 'Start New Session'}
                         </button>
                     </div>
                 ) : (

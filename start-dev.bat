@@ -2,14 +2,17 @@
 echo Starting CoAct.AI Development Environment...
 echo.
 
+set PROJECT_ROOT=%~dp0
+set PROJECT_ROOT=%PROJECT_ROOT:~0,-1%
+
 :: Start backend in a new window
-start "CoAct.AI Backend" cmd /k "cd /d d:\CoAct.AI\inter-ai-backend && python app.py"
+start "CoAct.AI Backend" cmd /k "cd /d "%PROJECT_ROOT%\inter-ai-backend" && if exist .venv\Scripts\python.exe (.venv\Scripts\python.exe app.py) else (python app.py)"
 
 :: Wait a moment for backend to initialize
 timeout /t 3 /nobreak >nul
 
 :: Start frontend in a new window
-start "CoAct.AI Frontend" cmd /k "cd /d d:\CoAct.AI\inter-ai-frontend && npm run dev"
+start "CoAct.AI Frontend" cmd /k "cd /d "%PROJECT_ROOT%\inter-ai-frontend" && npm run dev"
 
 echo.
 echo Both servers are starting...

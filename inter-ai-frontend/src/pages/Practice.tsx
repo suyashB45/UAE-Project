@@ -405,11 +405,13 @@ export default function Practice() {
                     role: data.role,
                     ai_role: data.ai_role,
                     scenario: data.scenario,
+                    title: data.title,
                     createdAt: new Date().toISOString(),
                     transcript: [{ role: "assistant", content: summary }],
                     sessionId: session_id,
                     completed: false,
                     scenario_type: result.scenario_type || 'custom',
+                    session_mode: result.session_mode || data.session_mode || 'skill_assessment',
                     ai_character: result.ai_character || data.ai_character,
                     multi_characters: result.multi_characters || false,
                     characters: result.characters || null

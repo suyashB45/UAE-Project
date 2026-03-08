@@ -134,7 +134,10 @@ export default function Conversation() {
 
     const speakText = async (text: string, forcedCharacter?: string, forceVoice?: string) => {
         // Don't start TTS if session has ended
-        if (sessionEndedRef.current) return
+        if (sessionEndedRef.current) {
+            console.warn("[TTS] Skipped — session ended")
+            return
+        }
 
         try {
             // Determine voice: explicit override > character-based > default
@@ -147,6 +150,7 @@ export default function Conversation() {
             const ttsController = new AbortController()
             ttsAbortRef.current = ttsController
 
+            console.log("[TTS] Fetching audio...", { voice, textLen: text.length })
             const response = await fetch(getApiUrl('/api/speak'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -154,7 +158,7 @@ export default function Conversation() {
                 signal: ttsController.signal
             })
 
-            if (!response.ok) throw new Error("TTS failed")
+            if (!response.ok) throw new Error(`TTS failed: ${response.status}`)
 
             // Don't play if session ended while fetching
             if (sessionEndedRef.current) {
@@ -163,6 +167,7 @@ export default function Conversation() {
             }
 
             const blob = await response.blob()
+            console.log("[TTS] Audio received:", blob.size, "bytes, type:", blob.type)
             const url = URL.createObjectURL(blob)
 
             if (aiAudioRef.current) {
@@ -182,15 +187,16 @@ export default function Conversation() {
                     resolve()
                 }
 
-                audio.onerror = () => {
+                audio.onerror = (e) => {
                     setIsAiSpeaking(false)
-                    console.error("Audio playback error")
+                    console.error("[TTS] Audio playback error:", e)
                     URL.revokeObjectURL(url)
                     resolve()
                 }
 
-                audio.play().catch(() => {
+                audio.play().catch((err) => {
                     setIsAiSpeaking(false)
+                    console.error("[TTS] audio.play() rejected:", err)
                     URL.revokeObjectURL(url)
                     resolve()
                 })
@@ -212,8 +218,9 @@ export default function Conversation() {
         }
     }
 
-    // Stop audio on unmount
+    // Reset sessionEnded on mount, clean up on unmount
     useEffect(() => {
+        sessionEndedRef.current = false
         return () => {
             sessionEndedRef.current = true
             if (ttsAbortRef.current) ttsAbortRef.current.abort()

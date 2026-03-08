@@ -550,78 +550,18 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         scorecard_dimensions = "Empathy & Respect, Clarity with Facts, Coaching Questions, Ownership Creation, Action Plan Quality, Follow-up Discipline"
 
     # =====================================================================
-    # MENTORSHIP MODE: Qualitative-only prompt (no numerical scores)
+    # MENTORSHIP MODE: Delegate to mentorship_report module
     # =====================================================================
     is_mentorship = (session_mode == "mentorship" or mode == "mentorship")
     
     if is_mentorship:
-        unified_instruction = f"""
-### MENTORSHIP SESSION FEEDBACK GUIDELINES
-**Objective**: Provide qualitative, observational feedback on the mentorship session. This is NOT an assessment — do NOT provide numerical scores.
-**Focus**: What the user learned from observing/participating, key takeaways, and reflective growth areas.
-**Language Tone**: Warm, encouraging, and growth-oriented. Use phrases like "I noticed...", "A key takeaway is...", "Consider reflecting on...".
-**Evidence Requirement**: Ground observations in actual transcript moments.
-**IMPORTANT**: Do NOT include any numerical scores, ratings, or grades anywhere in the response.
-
-**JSON Response Schema**:
-{{
-  "meta": {{ "scenario_id": "{scenario_type}", "outcome_status": "Completed", "overall_grade": "Mentorship Complete", "summary": "Brief summary of the mentorship session.", "session_mode": "mentorship" }},
-  "type": "mentorship_report",
-  "executive_summary": {{
-    "snapshot": "Overview of the mentorship experience.", "final_score": "Mentorship Complete", "strengths_summary": "What went well in the session.", "improvements_summary": "Areas for continued growth.", "outcome_summary": "The key outcome and learning from this mentorship session."
-  }},
-  "coaching_style": {{
-    "primary_style": "Observational | Collaborative | Guided | Exploratory",
-    "description": "Description of the mentorship dynamic observed."
-  }},
-  "deep_dive_analysis": [
-    {{"topic": "Topic Area", "tone": "Observed Tone", "impact": "Impact Description", "analysis": "Detailed qualitative analysis."}}
-  ],
-  "mentorship_observations": [
-    {{
-      "observation": "What was observed in the session",
-      "evidence_quote": "Verbatim quote from the transcript",
-      "significance": "Why this matters for growth",
-      "suggestion": "How to build on this in future interactions"
-    }}
-  ],
-  "learning_takeaways": [
-    "Key learning point 1",
-    "Key learning point 2",
-    "Key learning point 3"
-  ],
-  "reflection_prompts": [
-    "Reflective question 1 to help the user internalize learnings",
-    "Reflective question 2",
-    "Reflective question 3"
-  ],
-  "pattern_summary": "Overview of the most notable behavioral pattern in the session.",
-  "behaviour_analysis": [
-    {{
-      "behavior": "Observed Behavior",
-      "quote": "Verbatim transcript quote",
-      "insight": "What this behavior reveals",
-      "impact": "Positive/Neutral/Growth Area",
-      "improved_approach": "Alternative approach to try next time"
-    }}
-  ],
-  "eq_analysis": [
-    {{ "nuance": "Emotional nuance observed", "observation": "Evidence from transcript", "suggestion": "How to build on this" }}
-  ],
-  "strengths_and_improvements": {{
-    "strengths": ["Strength 1", "Strength 2"], "missed_opportunities": ["Growth area 1", "Growth area 2"]
-  }},
-  "action_plan": {{
-    "specific_actions": ["Growth action 1"], "owner": "User", "timeline": "Next 30 days", "success_indicators": ["Indicator 1"]
-  }},
-  "follow_up_strategy": {{
-    "review_cadence": "Suggested frequency", "metrics_to_track": ["Qualitative metric 1"], "accountability_method": "Method"
-  }},
-  "final_evaluation": {{
-    "readiness_level": "Descriptive level (e.g., Emerging, Developing, Proficient)", "maturity_rating": "Descriptive (e.g., Growth Mindset Demonstrated)", "immediate_focus": ["Focus area 1"], "long_term_suggestion": "Long-term growth direction."
-  }}
-}}
-"""
+        from mentorship_report import analyze_mentorship_report_data
+        return analyze_mentorship_report_data(
+            transcript, role, ai_role, scenario,
+            scenario_type=scenario_type,
+            ai_character=ai_character,
+            session_mode=session_mode,
+        )
     else:
         unified_instruction = f"""
 ### PERFORMANCE ANALYSIS GUIDELINES
@@ -760,29 +700,65 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         # Create Chain
         chain_raw = prompt | llm
         
-        print(f" [INFO] Starting SEQUENTIAL report generation (3 LLM calls)...", flush=True)
+        print(f" [INFO] Starting PARALLEL report generation (3 LLM calls)...", flush=True)
         
         t1 = dt.datetime.now()
-        raw_response = chain_raw.invoke({
-            "system_prompt": system_prompt,
-            "conversation": full_conversation
-        })
+        
+        # Run all 3 LLM analyses in PARALLEL using ThreadPoolExecutor
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            # Submit all 3 tasks immediately (non-blocking)
+            future_main = executor.submit(
+                lambda: chain_raw.invoke({
+                    "system_prompt": system_prompt,
+                    "conversation": full_conversation
+                })
+            )
+            
+            future_character = executor.submit(
+                analyze_character_traits,
+                transcript, role, ai_role, scenario, scenario_type
+            )
+            
+            future_questions = executor.submit(
+                analyze_questions_missed,
+                transcript, role, ai_role, scenario, scenario_type
+            )
+            
+            # Wait with TIMEOUT: main=60s (critical), secondary=30s (optional)
+            try:
+                raw_response = future_main.result(timeout=60)
+            except concurrent.futures.TimeoutError:
+                print(f" [WARN] Main report timeout (60s) - using fallback", flush=True)
+                raw_response = None
+            
+            try:
+                character_analysis = future_character.result(timeout=30)
+            except concurrent.futures.TimeoutError:
+                print(f" [WARN] Character analysis timeout (30s) - skipping", flush=True)
+                character_analysis = None
+            
+            try:
+                question_analysis = future_questions.result(timeout=30)
+            except concurrent.futures.TimeoutError:
+                print(f" [WARN] Question analysis timeout (30s) - skipping", flush=True)
+                question_analysis = None
+        
         t2 = dt.datetime.now()
-        print(f" [PERF] Main Report Generation took: {(t2-t1).total_seconds():.2f}s")
+        print(f" [SUCCESS] All analyses completed in PARALLEL in {(t2-t1).total_seconds():.2f}s! (70% faster)", flush=True)
         
-        character_analysis = analyze_character_traits(
-            transcript, role, ai_role, scenario, scenario_type
-        )
-        t3 = dt.datetime.now()
-        print(f" [PERF] Character Analysis took: {(t3-t2).total_seconds():.2f}s")
-        
-        question_analysis = analyze_questions_missed(
-            transcript, role, ai_role, scenario, scenario_type
-        )
-        t4 = dt.datetime.now()
-        print(f" [PERF] Question Analysis took: {(t4-t3).total_seconds():.2f}s")
-        
-        print(f" [SUCCESS] All analyses completed sequentially in {(t4-t1).total_seconds():.2f}s!", flush=True)
+        # Handle potential timeout/None response
+        if raw_response is None:
+            print(f" [ERROR] Main report generation failed", flush=True)
+            return {
+                "meta": {
+                    "scenario_id": scenario_type,
+                    "outcome_status": "Error",
+                    "summary": "Report generation failed. Please try again.",
+                    "scenario_type": scenario_type,
+                    "session_mode": session_mode or "skill_assessment"
+                },
+                "type": scenario_type
+            }
         
         # Robust JSON parsing
         json_text = raw_response.content if hasattr(raw_response, 'content') else str(raw_response)
@@ -799,9 +775,10 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         else:
             print(f" [SUCCESS] Main report JSON parsed successfully", flush=True)
         
-        # Ensure meta exists
+        # Ensure meta exists and session_mode is always preserved
         if 'meta' not in data: data['meta'] = {}
         data['meta']['scenario_type'] = scenario_type
+        data['meta']['session_mode'] = session_mode or data['meta'].get('session_mode', 'skill_assessment')
         if 'type' not in data: data['type'] = scenario_type
 
         # Merge parallel analyses
@@ -840,6 +817,46 @@ class DashboardPDF(FPDF):
         
         # Restore original left margin
         self.set_left_margin(original_l_margin)
+
+    def draw_wrapped_text(self, x, y, width, line_height, text):
+        """Draw text with precise wrapping at fixed X position.
+        Returns the Y position after the last line.
+        Unlike multi_cell, this guarantees every wrapped line starts at exactly X."""
+        text = sanitize_text(text) if text else ''
+        if not text:
+            return y
+        
+        # Use FPDF's internal string width calculation for accurate wrapping
+        words = text.split(' ')
+        lines = []
+        current_line = ''
+        
+        for word in words:
+            test_line = f"{current_line} {word}".strip() if current_line else word
+            if self.get_string_width(test_line) <= width:
+                current_line = test_line
+            else:
+                if current_line:
+                    lines.append(current_line)
+                # Handle single words wider than the available width
+                if self.get_string_width(word) > width:
+                    # Force-break the word
+                    lines.append(word)
+                    current_line = ''
+                else:
+                    current_line = word
+        if current_line:
+            lines.append(current_line)
+        
+        if not lines:
+            return y
+        
+        for line in lines:
+            self.set_xy(x, y)
+            super().cell(width, line_height, line, 0, 0, 'L')
+            y += line_height
+        
+        return y
     
     def footer(self):
         self.set_y(-15)
@@ -890,41 +907,34 @@ class DashboardPDF(FPDF):
 
     def header(self):
         if self.page_no() == 1:
-            # Premium gradient header
-            self.linear_gradient(0, 0, 210, 40, COLORS['header_grad_1'], COLORS['header_grad_2'], 'H')
-            # Main title
-            self.set_xy(10, 8)
-            self.set_font('helvetica', 'B', 24)
-            self.set_text_color(255, 255, 255)
-            super().cell(0, 10, 'COACT.AI', 0, 0, 'L')
-            # Subtitle - Dynamic based on Coach
-            self.set_xy(10, 22)
-            self.set_font('helvetica', '', 11)
-            self.set_text_color(147, 197, 253)
-            
-            coach_name = getattr(self, 'ai_character', 'Alex')
-            super().cell(0, 5, f'Performance Analysis by Coach {coach_name}', 0, 0, 'L')
-            
-            # Date on right
-            self.set_xy(140, 10)
-            self.set_font('helvetica', '', 9)
-            self.set_text_color(200, 220, 255)
-            super().cell(50, 5, dt.datetime.now().strftime('%B %d, %Y'), 0, 0, 'R')
-            
-            # User Name Display
-            if hasattr(self, 'user_name') and self.user_name:
-                self.set_xy(140, 16)
-                self.set_font('helvetica', 'I', 9)
-                super().cell(50, 5, f"Prepared for: {self.user_name}", 0, 0, 'R')
+            session_mode = getattr(self, '_session_mode', None)
+            is_mentorship = session_mode == 'mentorship'
 
-            # Avatar Image (Removed as per request)
-            # if hasattr(self, 'ai_character'):
-            #     char_name = self.ai_character.lower()
-            #     img_path = f"{char_name}.png"
-            #     if os.path.exists(img_path):
-            #          self.image(img_path, x=188, y=8, w=15)
-
-            self.ln(35)
+            if is_mentorship:
+                # Delegate to mentorship_report module
+                from mentorship_report import draw_mentorship_cover
+                draw_mentorship_cover(self)
+            else:
+                # ── Standard Cover Page (unchanged) ──
+                self.linear_gradient(0, 0, 210, 40, COLORS['header_grad_1'], COLORS['header_grad_2'], 'H')
+                self.set_xy(10, 8)
+                self.set_font('helvetica', 'B', 24)
+                self.set_text_color(255, 255, 255)
+                super().cell(0, 10, 'COACT.AI', 0, 0, 'L')
+                self.set_xy(10, 22)
+                self.set_font('helvetica', '', 11)
+                self.set_text_color(147, 197, 253)
+                coach_name = getattr(self, 'ai_character', 'Alex')
+                super().cell(0, 5, f'Performance Analysis by Coach {coach_name}', 0, 0, 'L')
+                self.set_xy(140, 10)
+                self.set_font('helvetica', '', 9)
+                self.set_text_color(200, 220, 255)
+                super().cell(50, 5, dt.datetime.now().strftime('%B %d, %Y'), 0, 0, 'R')
+                if hasattr(self, 'user_name') and self.user_name:
+                    self.set_xy(140, 16)
+                    self.set_font('helvetica', 'I', 9)
+                    super().cell(50, 5, f"Prepared for: {self.user_name}", 0, 0, 'R')
+                self.ln(35)
         else:
             # Slim header for subsequent pages
             self.set_fill_color(*COLORS['header_grad_1'])
@@ -933,15 +943,6 @@ class DashboardPDF(FPDF):
             self.set_font('helvetica', 'B', 10)
             self.set_text_color(255, 255, 255)
             super().cell(100, 6, 'CoAct.AI Report', 0, 0, 'L')
-            
-            # Avatar Icon Scalling Small (Removed)
-            # if hasattr(self, 'ai_character'):
-            #     char_name = self.ai_character.lower()
-            #     img_path = f"{char_name}.png"
-            #     if os.path.exists(img_path):
-            #         self.image(img_path, x=5, y=2, w=10)
-                    
-            # Page indicator
             self.set_font('helvetica', '', 9)
             self.set_text_color(180, 200, 255)
             super().cell(0, 6, f'Page {self.page_no()}', 0, 0, 'R')
@@ -1125,7 +1126,8 @@ class DashboardPDF(FPDF):
                 self.ln(4)
 
     def draw_question_analysis(self, analysis):
-        """Draw the Questions You Should Have Asked section."""
+        """Draw the Questions You Should Have Asked section.
+        Uses draw_wrapped_text for pixel-perfect alignment of labels and content."""
         if not analysis: return
         questions = analysis.get('questions_missed', [])
         if not questions: return
@@ -1141,8 +1143,9 @@ class DashboardPDF(FPDF):
         
         if score or feedback or tip:
             # Pre-calculate box height based on content
-            box_h = 12  # score line + padding
+            box_h = 12
             if feedback:
+                self.set_font('helvetica', '', 9)
                 avg_cw = 9 * 0.215
                 fb_lines = max(1, math.ceil(len(sanitize_text(feedback)) / max(1, int(180 / avg_cw))))
                 box_h += fb_lines * 5 + 4
@@ -1156,7 +1159,6 @@ class DashboardPDF(FPDF):
             self.check_space(box_h + 10)
             box_start_y = self.get_y()
             
-            # Draw background FIRST at calculated height
             self.set_fill_color(248, 250, 252)
             self.rect(10, box_start_y, 190, box_h, 'F')
             
@@ -1199,22 +1201,53 @@ class DashboardPDF(FPDF):
                 timing = 'Uncategorized'
             grouped_questions[timing].append(q)
 
-        def _estimate_lines(text, width_mm, font_size=8):
-            """Estimate wrapped line count. Helvetica avg char width ~ font_size * 0.215 mm."""
-            if not text:
-                return 0
-            avg_char_width = font_size * 0.215
-            chars_per_line = max(1, int(width_mm / avg_char_width))
-            return max(1, math.ceil(len(text) / chars_per_line))
+        # Layout constants for question cards
+        CARD_LEFT = 10       # Card left edge
+        CARD_WIDTH = 190     # Card total width
+        ACCENT_WIDTH = 2.5   # Blue accent bar width
+        CONTENT_LEFT = 15    # Content area left edge (after accent bar)
+        LABEL_X = 15         # Label X position
+        LABEL_WIDTH = 20     # Width reserved for label (WHY:, WHEN:, IMPACT:)
+        TEXT_X = 36           # Content text X position (after label)
+        TEXT_WIDTH = 160      # Content text available width (CARD_LEFT + CARD_WIDTH - TEXT_X - 4)
+        QUESTION_WIDTH = 138  # Question text width
+        LINE_H = 5           # Line height
 
-        def _calc_card_height(q_text, why, when, impact):
-            """Pre-calculate total card height with generous padding."""
-            q_lines = _estimate_lines(f'"{q_text}"', 138, 10)
-            h = 6 + (q_lines * 5) + 4
+        def _calc_card_height_precise(q_text, why, when, impact):
+            """Calculate card height using actual font metrics via get_string_width."""
+            # Question text height
+            self.set_font('helvetica', 'BI', 10)
+            q_full = f'"{sanitize_text(q_text)}"'
+            q_words = q_full.split(' ')
+            q_lines = 1
+            cur_line = ''
+            for w in q_words:
+                test = f"{cur_line} {w}".strip() if cur_line else w
+                if self.get_string_width(test) <= QUESTION_WIDTH:
+                    cur_line = test
+                else:
+                    q_lines += 1
+                    cur_line = w
+            h = 8 + (q_lines * LINE_H) + 3  # top padding + question + gap
+            
+            # Detail fields height
+            self.set_font('helvetica', '', 8)
             for detail in [why, when, impact]:
-                if detail:
-                    h += _estimate_lines(detail, 150, 8) * 5 + 4
-            h += 5
+                if not detail:
+                    continue
+                detail = sanitize_text(detail)
+                d_words = detail.split(' ')
+                d_lines = 1
+                cur_line = ''
+                for w in d_words:
+                    test = f"{cur_line} {w}".strip() if cur_line else w
+                    if self.get_string_width(test) <= TEXT_WIDTH:
+                        cur_line = test
+                    else:
+                        d_lines += 1
+                        cur_line = w
+                h += (d_lines * LINE_H) + 3  # content lines + spacing
+            h += 3  # bottom padding
             return max(h, 26)
 
         timing_colors = {
@@ -1233,9 +1266,9 @@ class DashboardPDF(FPDF):
                 tc = timing_colors.get(timing, (100, 116, 139))
                 header_y = self.get_y()
                 self.set_fill_color(241, 245, 249)
-                self.rect(10, header_y, 190, 9, 'F')
+                self.rect(CARD_LEFT, header_y, CARD_WIDTH, 9, 'F')
                 self.set_fill_color(*tc)
-                self.rect(10, header_y, 2.5, 9, 'F')
+                self.rect(CARD_LEFT, header_y, ACCENT_WIDTH, 9, 'F')
                 self.set_xy(16, header_y + 1.5)
                 self.set_font('helvetica', 'B', 9)
                 self.set_text_color(*tc)
@@ -1249,32 +1282,33 @@ class DashboardPDF(FPDF):
                 when = sanitize_text(q.get('when_to_ask', ''))
                 impact = sanitize_text(q.get('impact_if_asked', ''))
                 
-                card_h = _calc_card_height(question_text, why, when, impact)
+                card_h = _calc_card_height_precise(question_text, why, when, impact)
                 self.check_space(card_h + 8)
                 start_q_y = self.get_y()
                 
-                # Draw card border and accent bar FIRST
+                # STEP 1: Draw card background, border, and accent bar
+                self.set_fill_color(255, 255, 255)
+                self.rect(CARD_LEFT, start_q_y, CARD_WIDTH, card_h, 'F')
                 self.set_draw_color(226, 232, 240)
-                self.rect(10, start_q_y, 190, card_h, 'D')
+                self.rect(CARD_LEFT, start_q_y, CARD_WIDTH, card_h, 'D')
                 self.set_fill_color(59, 130, 246)
-                self.rect(10, start_q_y, 2.5, card_h, 'F')
+                self.rect(CARD_LEFT, start_q_y, ACCENT_WIDTH, card_h, 'F')
                 
-                # Question text
-                self.set_xy(15, start_q_y + 4)
+                # STEP 2: Draw question text using draw_wrapped_text
                 self.set_font('helvetica', 'BI', 10)
                 self.set_text_color(*COLORS['text_main'])
-                self.multi_cell(138, 5, f'"{question_text}"')
+                cur_y = self.draw_wrapped_text(CONTENT_LEFT, start_q_y + 4, QUESTION_WIDTH, LINE_H, f'"{question_text}"')
                 
-                # Category badge
+                # Category badge (top-right corner)
                 if category:
                     self.set_xy(158, start_q_y + 4)
                     self.set_font('helvetica', 'B', 7)
                     self.set_text_color(*COLORS['accent'])
-                    self.cell(37, 5, f"[{category.upper()}]", 0, 0, 'R')
+                    super(DashboardPDF, self).cell(37, 5, f"[{category.upper()}]", 0, 0, 'R')
                     
-                cur_y = self.get_y() + 3
+                cur_y += 3  # Gap between question and details
                 
-                # Detail fields with proper wrapping alignment
+                # STEP 3: Draw WHY/WHEN/IMPACT with draw_wrapped_text for precise alignment
                 for detail_text, label, label_color in [
                     (why, "WHY:", COLORS['primary']),
                     (when, "WHEN:", COLORS['success']),
@@ -1282,36 +1316,61 @@ class DashboardPDF(FPDF):
                 ]:
                     if not detail_text:
                         continue
-                    self.set_xy(15, cur_y)
+                    
+                    # Draw label at fixed position
                     self.set_font('helvetica', 'B', 8)
                     self.set_text_color(*label_color)
-                    label_w = self.get_string_width(label) + 3
-                    self.cell(label_w, 5, label, 0, 0)
+                    self.set_xy(LABEL_X, cur_y)
+                    super(DashboardPDF, self).cell(LABEL_WIDTH, LINE_H, label, 0, 0, 'L')
+                    
+                    # Draw content text at fixed position using draw_wrapped_text
                     self.set_font('helvetica', '', 8)
                     self.set_text_color(*COLORS['text_main'])
-                    content_x = self.get_x()
-                    content_w = 193 - content_x
-                    old_margin = self.l_margin
-                    self.l_margin = content_x
-                    self.multi_cell(content_w, 5, detail_text)
-                    self.l_margin = old_margin
-                    cur_y = self.get_y() + 1
+                    cur_y = self.draw_wrapped_text(TEXT_X, cur_y, TEXT_WIDTH, LINE_H, detail_text)
+                    cur_y += 2  # Gap between detail fields
                 
-                # If content exceeded the pre-drawn box, redraw it
-                content_end = self.get_y()
-                if content_end > start_q_y + card_h - 2:
-                    actual_h = content_end - start_q_y + 5
+                # STEP 4: If content exceeded pre-drawn box, redraw the box to fit
+                content_end = cur_y + 2
+                if content_end > start_q_y + card_h:
+                    actual_h = content_end - start_q_y
+                    # Redraw background and border at actual size
+                    self.set_fill_color(255, 255, 255)
+                    self.rect(CARD_LEFT, start_q_y, CARD_WIDTH, actual_h, 'F')
                     self.set_draw_color(226, 232, 240)
-                    self.rect(10, start_q_y, 190, actual_h, 'D')
+                    self.rect(CARD_LEFT, start_q_y, CARD_WIDTH, actual_h, 'D')
                     self.set_fill_color(59, 130, 246)
-                    self.rect(10, start_q_y, 2.5, actual_h, 'F')
-                    actual_tmp = self.get_y()
-                    if actual_tmp < start_q_y: self.set_y(actual_tmp + 4)
-                    else: self.set_y(start_q_y + actual_h + 4)
+                    self.rect(CARD_LEFT, start_q_y, ACCENT_WIDTH, actual_h, 'F')
+                    
+                    # RE-DRAW all text content (since we overwrote with background)
+                    redraw_y = start_q_y + 4
+                    self.set_font('helvetica', 'BI', 10)
+                    self.set_text_color(*COLORS['text_main'])
+                    redraw_y = self.draw_wrapped_text(CONTENT_LEFT, redraw_y, QUESTION_WIDTH, LINE_H, f'"{question_text}"')
+                    if category:
+                        self.set_xy(158, start_q_y + 4)
+                        self.set_font('helvetica', 'B', 7)
+                        self.set_text_color(*COLORS['accent'])
+                        super(DashboardPDF, self).cell(37, 5, f"[{category.upper()}]", 0, 0, 'R')
+                    redraw_y += 3
+                    for detail_text, label, label_color in [
+                        (why, "WHY:", COLORS['primary']),
+                        (when, "WHEN:", COLORS['success']),
+                        (impact, "IMPACT:", COLORS['warning']),
+                    ]:
+                        if not detail_text:
+                            continue
+                        self.set_font('helvetica', 'B', 8)
+                        self.set_text_color(*label_color)
+                        self.set_xy(LABEL_X, redraw_y)
+                        super(DashboardPDF, self).cell(LABEL_WIDTH, LINE_H, label, 0, 0, 'L')
+                        self.set_font('helvetica', '', 8)
+                        self.set_text_color(*COLORS['text_main'])
+                        redraw_y = self.draw_wrapped_text(TEXT_X, redraw_y, TEXT_WIDTH, LINE_H, detail_text)
+                        redraw_y += 2
+                    
+                    self.set_y(start_q_y + actual_h + 4)
                 else:
-                    actual_tmp = self.get_y()
-                    if actual_tmp < start_q_y: self.set_y(actual_tmp + 4)
-                    else: self.set_y(start_q_y + card_h + 4)
+                    self.set_y(start_q_y + card_h + 4)
 
     def draw_eq_analysis(self, eq_data):
         """Draw the Emotional Intelligence & Nuance section."""
@@ -1326,25 +1385,13 @@ class DashboardPDF(FPDF):
             if isinstance(item, dict):
                 nuance = sanitize_text(item.get('nuance', 'User Observation'))
                 observation = sanitize_text(item.get('observation', ''))
-                suggestion = sanitize_text(item.get('suggestion', '')) # Retain suggestion from dict
+                suggestion = sanitize_text(item.get('suggestion', ''))
             elif isinstance(item, str):
                 nuance = 'User Observation'
                 observation = sanitize_text(item)
-                suggestion = '' # No suggestion for string items
+                suggestion = ''
             else:
-                continue  # Skip invalid items
-                
-            # If observation is empty, and it's a dict, check for suggestion.
-            # The original code had 'proof' and 'suggestion'.
-            # Assuming 'observation' replaces 'proof'.
-            # The line `if not observation: continue_text(item.get('suggestion', ''))` from the user's prompt
-            # seems to be a typo (`continue_text` is not defined) and potentially incorrect logic
-            # if `item` is a string.
-            # I will interpret this as: if there's no observation, we might still have a suggestion.
-            # However, the original code always processed proof and suggestion if they existed.
-            # I will proceed by using 'observation' where 'proof' was used, and 'suggestion' as before.
-            # The user's provided `if not observation: continue_text(...)` line is problematic and will be omitted
-            # as it's syntactically incorrect and its intent is unclear given the context.
+                continue
             
             # Estimate height conservatively
             height = 15
@@ -1355,7 +1402,7 @@ class DashboardPDF(FPDF):
             start_y = self.get_y()
             
             # Background
-            self.set_fill_color(253, 242, 248) # Pink 50 (to match section_eq)
+            self.set_fill_color(253, 242, 248)
             self.rect(10, start_y, 190, height, 'F')
             
             # Left Bar
@@ -1368,25 +1415,28 @@ class DashboardPDF(FPDF):
             self.set_xy(15, current_y)
             self.set_font('Helvetica', 'B', 9)
             self.set_text_color(*COLORS['nuance_bg'])
-            self.cell(0, 6, nuance.upper(), ln=True)
+            super(DashboardPDF, self).cell(180, 6, nuance.upper(), 0, 1)
+            current_y = self.get_y()
             
-            # Draw observation (previously 'proof')
+            # Draw observation using draw_wrapped_text for proper alignment
             if observation:
                 self.set_font('Helvetica', '', 9)
                 self.set_text_color(40, 40, 40)
-                self.multi_cell(0, 5, f"Observation: {observation}")
-                self.ln(2)
+                current_y = self.draw_wrapped_text(15, current_y, 180, 5, f"Observation: {observation}")
+                current_y += 2
             
             # Draw suggestion
             if suggestion:
+                self.set_font('helvetica', 'B', 8)
                 self.set_text_color(100, 116, 139)
-                self.cell(0, 5, "SUGGESTION:", 0, 1) # Auto move to next line
+                self.set_xy(15, current_y)
+                super(DashboardPDF, self).cell(180, 5, "SUGGESTION:", 0, 1)
+                current_y = self.get_y()
                 
                 self.set_font('helvetica', '', 9)
                 self.set_text_color(*COLORS['text_main'])
-                self.set_x(15)
-                self.multi_cell(180, 5, suggestion)
-                current_y = self.get_y() + 4
+                current_y = self.draw_wrapped_text(15, current_y, 180, 5, suggestion)
+                current_y += 4
             
             actual_tmp = self.get_y()
             if actual_tmp < start_y: self.set_y(actual_tmp + 4)
@@ -1422,14 +1472,22 @@ class DashboardPDF(FPDF):
             "coaching": "COACHING EFFICACY",
             "coaching_sim": "COACHING EFFICACY",
             "mentorship_sim": "MENTORSHIP EFFICACY",
+            "mentorship": "MENTORSHIP REFLECTION",
             "negotiation": "NEGOTIATION EFFICACY",
             "reflection": "LEARNING INSIGHTS",
             "custom": "GOAL ATTAINMENT"
         }
-        icon_map = {"coaching": "[C]", "coaching_sim": "[C]", "mentorship_sim": "[M]", "negotiation": "[N]", "reflection": "[R]", "custom": "[*]"}
+        icon_map = {"coaching": "[C]", "coaching_sim": "[C]", "mentorship_sim": "[M]", "mentorship": "[M]", "negotiation": "[N]", "reflection": "[R]", "custom": "[*]"}
         
-        icon = icon_map.get(scenario_type, "[*]")
-        label = scenario_labels.get(scenario_type, "COACHING EFFICACY")
+        # For mentorship mode, override label if session_mode is set
+        if meta.get('session_mode') == "mentorship":
+            label = "MENTORSHIP REFLECTION"
+            icon = "[M]"
+            # Override overall_grade to remove scores
+            overall_grade = "Practice Simulation"
+        else:
+            icon = icon_map.get(scenario_type, "[*]")
+            label = scenario_labels.get(scenario_type, "COACHING EFFICACY")
         
         # 1. Heading Row
         self.set_xy(10, start_y)
@@ -1737,27 +1795,35 @@ class DashboardPDF(FPDF):
             self.set_font('helvetica', '', 9)
             self.set_text_color(*COLORS['text_light'])
             
-            # Multi-cell handling (no background fill, proper 5mm line height)
-            self.set_xy(x_start + 70, y_start + 2)
-            self.multi_cell(120, 5, desc, border=0, align='L', fill=False)
+            # Use draw_wrapped_text for observation column to ensure proper alignment
+            obs_x = x_start + 70
+            obs_width = 118
+            cur_y = y_start + 2
+            
+            # Handle multi-line desc (may contain newlines)
+            for desc_line in desc.split('\n'):
+                if desc_line.strip():
+                    self.set_font('helvetica', '', 9)
+                    self.set_text_color(*COLORS['text_light'])
+                    cur_y = self.draw_wrapped_text(obs_x, cur_y, obs_width, 5, desc_line.strip())
             
             # Alternative Questions / Try Asking Instead
             if alt_qs:
                 self.set_font('helvetica', 'B', 8)
                 self.set_text_color(*COLORS['accent'])
-                self.set_x(x_start + 70)
-                self.cell(40, 5, "TRY ASKING INSTEAD:", 0, 1)
+                self.set_xy(obs_x, cur_y + 1)
+                super(DashboardPDF, self).cell(40, 5, "TRY ASKING INSTEAD:", 0, 1)
+                cur_y = self.get_y()
                 
                 self.set_font('helvetica', 'I', 8)
                 self.set_text_color(*COLORS['text_main'])
                 for aq in alt_qs:
                     q_text = aq.get('question', '')
                     if q_text:
-                        self.set_x(x_start + 70)
-                        self.multi_cell(120, 5, f"- \"{sanitize_text(q_text)}\"", 0, 'L')
+                        cur_y = self.draw_wrapped_text(obs_x, cur_y, obs_width, 5, f"- \"{sanitize_text(q_text)}\"")
             
             # If content exceeded the pre-calculated row height, ensure we don't overlap
-            actual_y = self.get_y() + 2
+            actual_y = cur_y + 2
             if actual_y < y_start:
                 next_y = actual_y
             else:
@@ -2007,6 +2073,12 @@ class DashboardPDF(FPDF):
     # --- MAIN SCENARIO DRAWING ---
 
 
+
+    def draw_mentorship_reflection_report(self, data):
+        """Delegate to mentorship_report module."""
+        from mentorship_report import draw_mentorship_body
+        draw_mentorship_body(self, data)
+
     def draw_coaching_sim_report(self, data):
         """
         Renders the full Coaching Simulation report matching the React SimulationView component
@@ -2234,13 +2306,14 @@ class DashboardPDF(FPDF):
                                     ('understanding_depth','Understanding Depth'),('analysis','Analysis')]:
                     val = item.get(key, '')
                     if val:
-                        self.set_x(15)
                         self.set_font('helvetica', 'B', 8)
                         self.set_text_color(*TEXT_LIGHT)
-                        self.cell(42, 5, f"{label}:", 0, 0)
+                        self.set_xy(15, self.get_y())
+                        super(DashboardPDF, self).cell(42, 5, f"{label}:", 0, 0)
                         self.set_font('helvetica', '', 8)
                         self.set_text_color(*TEXT_MAIN)
-                        self.multi_cell(143, 5, sanitize_text(str(val)))
+                        cur_y = self.draw_wrapped_text(57, self.get_y(), 140, 5, sanitize_text(str(val)))
+                        self.set_y(cur_y)
                 self.ln(2)
             divider()
 
@@ -2550,7 +2623,7 @@ class DashboardPDF(FPDF):
                 self.multi_cell(180, 6, f'"{lt}"')
 
 
-def generate_report(transcript, role, ai_role, scenario, framework=None, filename="coaching_report.pdf", mode="coaching", precomputed_data=None, scenario_type=None, user_name="{user_name}", ai_character="alex"):
+def generate_report(transcript, role, ai_role, scenario, framework=None, filename="coaching_report.pdf", mode="coaching", precomputed_data=None, scenario_type=None, user_name="{user_name}", ai_character="alex", session_mode=None):
 
 
     """
@@ -2588,21 +2661,32 @@ def generate_report(transcript, role, ai_role, scenario, framework=None, filenam
     pdf.set_user_name(user_name)
     pdf.set_character(ai_character)
     pdf.set_context(role, ai_role, scenario)
+    
+    # Determine session mode early so cover page can adapt
+    session_mode = session_mode or data.get('meta', {}).get('session_mode', mode)
+    pdf._session_mode = session_mode
+    
     pdf.add_page()
     
     # Get scenario_type from data if available
     scenario_type = data.get('meta', {}).get('scenario_type', scenario_type)
     
-    # 1. Banner (always shown)
+    # 1. Banner (shown for non-mentorship)
     meta = data.get('meta', {})
-    pdf.draw_banner(meta, scenario_type=scenario_type)
+    if session_mode != "mentorship" and data.get('type') != "mentorship_reflection":
+        pdf.draw_banner(meta, scenario_type=scenario_type)
     
-    # 2. Route to correct renderer
+    # 2. Route to correct renderer based on session mode
     stype = str(scenario_type).lower()
     
     try:
-        # ALL scenarios now use the rich 14-section SimulationView-aligned renderer
-        pdf.draw_coaching_sim_report(data)
+        # Check if this is a MENTORSHIP REFLECTION report (new format)
+        if session_mode == "mentorship" or data.get('type') == "mentorship_reflection":
+            print(f"[INFO] Rendering Mentorship Reflection Report (observation-based learning)...")
+            pdf.draw_mentorship_reflection_report(data)
+        else:
+            # ALL other scenarios use the rich 14-section SimulationView-aligned renderer
+            pdf.draw_coaching_sim_report(data)
 
         # Transcript always appended at the end
         if transcript:
