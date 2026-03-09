@@ -518,8 +518,10 @@ export default function Conversation() {
             // Call backend to complete session and generate report
             await fetch(getApiUrl(`/api/session/${sessionId}/complete`), {
                 method: 'POST',
-                headers: authHeaders
-
+                headers: {
+                    ...authHeaders,
+                    'Content-Type': 'application/json'
+                }
             })
 
             // Update localStorage for offline reference
@@ -552,7 +554,7 @@ export default function Conversation() {
             <div className="absolute inset-0 pointer-events-none">
                 <div className="absolute top-[20%] left-[20%] w-[600px] h-[600px] bg-primary/10 rounded-full blur-[120px] animate-pulse duration-[10s]" />
                 <div className="absolute bottom-[20%] right-[20%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] animate-pulse duration-[8s]" />
-                <div className="absolute inset-0 opacity-20 brightness-100 contrast-150 mix-blend-overlay dark:bg-[url('https://grainy-gradients.vercel.app/noise.svg')] bg-none"></div>
+
             </div>
 
             {/* Header - Mobile responsive */}

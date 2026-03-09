@@ -939,25 +939,14 @@ def get_history():
         if not user:
             return jsonify({"error": "Invalid token"}), 401
             
-        # Try fetching from Database first
+        # Fetch only completed sessions from Database
         user_id_str = str(user.id)
-        print(f"[HISTORY] Fetching sessions for user {user_id_str}")
-        db_result = get_user_sessions_from_db(user_id_str)
+        print(f"[HISTORY] Fetching completed sessions for user {user_id_str}")
+        db_result = get_user_sessions_from_db(user_id_str, completed_only=True)
         db_sessions = db_result.get("sessions", []) if isinstance(db_result, dict) else db_result
         
-        if db_sessions and len(db_sessions) > 0:
-            user_sessions = db_sessions
-            print(f"[HISTORY] Found {len(db_sessions)} sessions in database")
-            # Update cache
-            for s in db_sessions:
-                SESSIONS[s["id"]] = s
-        else:
-            # Fallback to fetching sessions in memory by user_id
-            user_sessions = [
-                s for s in SESSIONS.values() 
-                if str(s.get("user_id")) == user_id_str
-            ]
-            print(f"[HISTORY] DB returned 0 sessions, found {len(user_sessions)} in memory cache")
+        user_sessions = db_sessions if db_sessions else []
+        print(f"[HISTORY] Found {len(user_sessions)} completed sessions in database")
         
         # Sort by created_at desc (newest first)
         user_sessions.sort(key=lambda x: x.get("created_at", ""), reverse=True)
@@ -996,16 +985,10 @@ def get_history():
 @app.route("/api/health")
 def health_check():
     """Health check endpoint for VM monitoring"""
-    print("[DEBUG] Health check called", flush=True)
     return jsonify({
         "status": "healthy",
         "timestamp": dt.datetime.now().isoformat(),
-        "version": "enhanced-reports-v1.0",
-        "services": {
-            "llm": "connected" if client else "disconnected",
-            "reports": "available",
-            "sessions": len(SESSIONS)
-        }
+        "version": "enhanced-reports-v1.0"
     })
 
 # ---------------------------------------------------------
@@ -1019,14 +1002,18 @@ def contact_sales():
         if not data:
             return jsonify({"error": "Invalid JSON"}), 400
 
-        name = data.get("name", "").strip()
-        email = data.get("email", "").strip()
-        company = data.get("company", "").strip()
-        team_size = data.get("teamSize", "").strip()
-        message = data.get("message", "").strip()
+        name = data.get("name", "").strip()[:200]
+        email = data.get("email", "").strip()[:254]
+        company = data.get("company", "").strip()[:200]
+        team_size = data.get("teamSize", "").strip()[:50]
+        message = data.get("message", "").strip()[:2000]
 
         if not name or not email:
             return jsonify({"error": "Name and email are required"}), 400
+
+        # Basic email format validation
+        if not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email):
+            return jsonify({"error": "Invalid email format"}), 400
 
         # Store in Supabase
         from database import supabase as db_client
@@ -1229,7 +1216,7 @@ Based on the scenario, respond with ONLY the framework names separated by commas
         print(f"Framework selection error: {e}")
     
     # Default fallback
-    return ["GROW", "EQ", "STAR", "ADKAR", "SMART", "BOUNDARY", "OSKAR", "CBT", "CLEAR", "RADICAL CANDOR", "SFBT", "CIRCLE OF INFLUENCE", "SCARF", "FUEL", "GROW", "EQ", "STAR", "ADKAR", "SMART", "BOUNDARY", "OSKAR", "CBT", "CLEAR", "RADICAL CANDOR", "SFBT", "CIRCLE OF INFLUENCE", "SCARF", "FUEL"]
+    return ["GROW", "EQ", "STAR", "ADKAR", "SMART", "BOUNDARY", "OSKAR", "CBT", "CLEAR", "RADICAL CANDOR", "SFBT", "CIRCLE OF INFLUENCE", "SCARF", "FUEL"]
 
 def detect_session_mode(scenario: str, ai_role: str) -> str:
     """Auto-detect whether session should be 'assessment' or 'learning' mode based on scenario context."""
@@ -1427,7 +1414,7 @@ def start_session():
         "meta": {"framework_counts": {}, "relevance_issues": 0}
     }
     SESSIONS[session_id] = session_data
-    save_session_to_db(session_data) # Save to Supabase
+    # Only save to Supabase on session complete (with final report)
 
     return jsonify({
         "session_id": session_id, 
@@ -1447,6 +1434,12 @@ def chat(session_id: str):
     sess = get_session(session_id)
     if not sess: 
         return jsonify({"error": "Session not found"}), 404
+    
+    # Verify session ownership
+    user = get_authenticated_user()
+    session_user_id = sess.get("user_id")
+    if session_user_id and (not user or str(session_user_id) != str(user.id)):
+        return jsonify({"error": "Forbidden"}), 403
     
     data = request.get_json()
     if not data:
@@ -1513,9 +1506,8 @@ def chat(session_id: str):
         meta["framework_counts"] = counts
         sess["meta"] = meta
         
-    # Persist response
+    # Persist response in memory (only saved to Supabase on session complete)
     sess["transcript"].append({"role": "assistant", "content": raw_response})
-    save_session_to_db(sess) # Save to Supabase
  
     return jsonify({
         "follow_up": clean_response, 
@@ -1528,6 +1520,12 @@ def complete_session(session_id: str):
     sess = get_session(session_id)
     if not sess: 
         return jsonify({"error": "Not found"}), 404
+    
+    # Verify session ownership
+    user = get_authenticated_user()
+    session_user_id = sess.get("user_id")
+    if session_user_id and (not user or str(session_user_id) != str(user.id)):
+        return jsonify({"error": "Forbidden"}), 403
     
     report_path = os.path.join(ensure_reports_dir(), f"{session_id}_report.pdf")
     
@@ -1764,24 +1762,29 @@ def get_report_data(session_id: str):
 
 @app.get("/api/sessions")
 def get_sessions():
-    """Return a list of all sessions sorted by date (newest first)."""
+    """Return sessions for the authenticated user sorted by date (newest first)."""
+    user = get_authenticated_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    
     try:
+        user_id_str = str(user.id)
         session_list = []
         for sess in SESSIONS.values():
+            if str(sess.get("user_id", "")) != user_id_str:
+                continue
             session_list.append({
                 "id": sess["id"],
                 "created_at": sess["created_at"],
                 "role": sess["role"],
                 "ai_role": sess["ai_role"],
-                "ai_role": sess["ai_role"],
                 "scenario": sess["scenario"],
-                "title": sess.get("title"), # Return title
+                "title": sess.get("title"),
                 "completed": sess["completed"],
                 "report_file": sess["report_file"],
                 "framework": sess["framework"],
                 "score": (lambda rd: float(str(rd.get("meta", {}).get("overall_grade", "0")).split("/")[0].strip()) if rd and "/" in str(rd.get("meta", {}).get("overall_grade", "")) else 0)(sess.get("report_data", {}))
             })
-        # Sort by created_at descending
         session_list.sort(key=lambda x: x["created_at"], reverse=True)
         return jsonify(session_list)
     except Exception as e:
@@ -1818,19 +1821,19 @@ def get_user_sessions_paginated():
 
 @app.route("/api/sessions/clear", methods=["POST"])
 def clear_sessions():
-    """Clear all session history."""
+    """Clear session history for the authenticated user."""
+    user = get_authenticated_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    
     try:
-        user = get_authenticated_user()
-        if user:
-            clear_user_sessions_from_db(str(user.id))
-            
-            # Remove from memory as well
-            keys_to_delete = [k for k, v in SESSIONS.items() if str(v.get("user_id")) == str(user.id)]
-            for k in keys_to_delete:
-                del SESSIONS[k]
-        else:
-            SESSIONS.clear()
-        print(" [SUCCESS] Sessions cleared successfully")
+        clear_user_sessions_from_db(str(user.id))
+        
+        # Remove from memory as well
+        keys_to_delete = [k for k, v in SESSIONS.items() if str(v.get("user_id")) == str(user.id)]
+        for k in keys_to_delete:
+            del SESSIONS[k]
+        print(f" [SUCCESS] Sessions cleared for user {user.id}")
         return jsonify({"message": "History cleared successfully"})
     except Exception as e:
         print(f" [ERROR] Error clearing sessions: {e}")
@@ -1839,4 +1842,5 @@ def clear_sessions():
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    is_dev = os.getenv("FLASK_ENV", "production") == "development"
+    app.run(host="0.0.0.0", port=port, debug=is_dev)

@@ -190,21 +190,26 @@ def get_session_from_db(session_id):
         print(f"[ERROR] DB Fetch failed for {session_id}: {e}")
         return None
 
-def get_user_sessions_from_db(user_id, limit=20, offset=0):
+def get_user_sessions_from_db(user_id, limit=20, offset=0, completed_only=False):
     """Get paginated sessions for user.
     
     OPTIMIZATION: Only fetches limit items instead of all sessions.
     This prevents large payloads and slow page loads for power users.
+    When completed_only=True, returns only sessions with completed=True (has final report).
     """
     if not supabase: 
         return {"sessions": [], "total": 0, "limit": limit, "offset": offset}
     try:
         # Fetch with pagination using range()
         # count="exact" gives us the total count
-        res = supabase.table("practice_history")\
+        query = supabase.table("practice_history")\
             .select("session_id, user_id, scenario_type, session_mode, title, ai_character, mode, role, ai_role, scenario, framework, completed, created_at, score", count="exact")\
-            .eq("user_id", user_id)\
-            .order("created_at", desc=True)\
+            .eq("user_id", user_id)
+        
+        if completed_only:
+            query = query.eq("completed", True)
+        
+        res = query.order("created_at", desc=True)\
             .range(offset, offset + limit - 1)\
             .execute()
         

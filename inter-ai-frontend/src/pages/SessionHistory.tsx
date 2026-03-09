@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Clock, User, Bot, CheckCircle2, PlayCircle, Calendar, Trophy, Sparkles, BookOpen } from "lucide-react"
+import { Clock, User, Bot, Calendar, Trophy, Sparkles, BookOpen } from "lucide-react"
 import { motion } from "framer-motion"
 
 import Navigation from "../components/landing/Navigation"
@@ -17,7 +17,6 @@ interface SessionItem {
     ai_role: string
     scenario: string
     topic: string
-    completed: boolean
     fit_score: number
     session_mode: string
 }
@@ -26,61 +25,19 @@ export default function SessionHistory() {
     const navigate = useNavigate()
     const [sessions, setSessions] = useState<SessionItem[]>([])
     const [loading, setLoading] = useState(true)
-    const [filter, setFilter] = useState<'all' | 'completed' | 'ongoing'>('all')
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
-        const getLocalSessions = (): SessionItem[] => {
-            const localSessions: SessionItem[] = []
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i)
-                if (key?.startsWith('session_')) {
-                    try {
-                        const raw = JSON.parse(localStorage.getItem(key) || '{}')
-                        if (raw.sessionId) {
-                            localSessions.push({
-                                id: raw.sessionId,
-                                session_id: raw.sessionId,
-                                created_at: raw.createdAt || new Date().toISOString(),
-                                role: raw.role || '',
-                                ai_role: raw.ai_role || '',
-                                scenario: raw.title || raw.scenario || 'Untitled Scenario',
-                                topic: raw.scenario_type || 'General',
-                                completed: raw.completed ?? false,
-                                fit_score: raw.score || 0,
-                                session_mode: raw.session_mode || 'skill_assessment'
-                            })
-                        }
-                    } catch { /* skip invalid entries */ }
-                }
-            }
-            localSessions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-            return localSessions
-        }
-
         const fetchSessions = async () => {
             try {
-                // Get current user from Supabase
                 const { data: { user } } = await supabase.auth.getUser();
+                if (!user) { navigate('/login'); return; }
 
-                if (!user) {
-                    navigate('/login');
-                    return;
-                }
-
-                // Get session for API calls with auth token
                 const { data: { session } } = await supabase.auth.getSession();
+                if (!session) { navigate('/login'); return; }
 
-                if (!session) {
-                    navigate('/login');
-                    return;
-                }
-
-                // Fetch from backend using authenticated endpoint
                 const res = await fetch(getApiUrl('/api/history'), {
-                    headers: {
-                        'Authorization': `Bearer ${session.access_token}`
-                    }
+                    headers: { 'Authorization': `Bearer ${session.access_token}` }
                 });
 
                 if (!res.ok) {
@@ -96,7 +53,6 @@ export default function SessionHistory() {
                     throw new Error(data?.error || 'Unexpected response format')
                 }
 
-                // Map backend format to frontend interface
                 const mappedSessions = data.map((s: any) => ({
                     id: s.session_id,
                     session_id: s.session_id,
@@ -105,7 +61,6 @@ export default function SessionHistory() {
                     ai_role: s.ai_role,
                     scenario: s.title || s.scenario || "Untitled Scenario",
                     topic: s.scenario_type || "General",
-                    completed: s.completed ?? false,
                     fit_score: s.score || 0,
                     session_mode: s.session_mode || "skill_assessment"
                 }))
@@ -113,15 +68,8 @@ export default function SessionHistory() {
                 setSessions(mappedSessions)
                 setError(null)
             } catch (err: any) {
-                console.error("Failed to load sessions from API:", err)
-                // Fallback: load sessions from localStorage
-                const localSessions = getLocalSessions()
-                if (localSessions.length > 0) {
-                    setSessions(localSessions)
-                    setError(null)
-                } else {
-                    setError(err?.message || 'Failed to load session history')
-                }
+                console.error("Failed to load sessions:", err)
+                setError(err?.message || 'Failed to load session history')
             } finally {
                 setLoading(false)
             }
@@ -140,12 +88,6 @@ export default function SessionHistory() {
         }).format(date)
     }
 
-    const filteredSessions = sessions.filter(s => {
-        if (filter === 'completed') return s.completed
-        if (filter === 'ongoing') return !s.completed
-        return true
-    })
-
     return (
         <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/30">
             <Navigation />
@@ -157,27 +99,10 @@ export default function SessionHistory() {
             </div>
 
             <main className="container mx-auto px-4 sm:px-6 pt-24 sm:pt-32 pb-16 sm:pb-32">
-                {/* Controls */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12">
-                    <div>
-                        <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">Conversation History</h2>
-                        <p className="text-muted-foreground text-lg">Track your progress and review past scenarios.</p>
-                    </div>
-
-                    <div className="flex bg-muted p-1.5 rounded-xl border border-border shadow-lg">
-                        {(['all', 'completed', 'ongoing'] as const).map((f) => (
-                            <button
-                                key={f}
-                                onClick={() => setFilter(f)}
-                                className={`px-3 sm:px-5 py-2 rounded-lg text-xs sm:text-sm font-bold capitalize transition-all duration-300 btn-press ${filter === f
-                                    ? 'bg-gradient-to-r from-primary to-purple-600 text-primary-foreground shadow-lg shadow-primary/30'
-                                    : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-                                    }`}
-                            >
-                                {f}
-                            </button>
-                        ))}
-                    </div>
+                {/* Header */}
+                <div className="mb-12">
+                    <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">Completed Sessions</h2>
+                    <p className="text-muted-foreground text-lg">Review your completed conversations and reports.</p>
                 </div>
 
                 {loading ? (
@@ -185,18 +110,18 @@ export default function SessionHistory() {
                         <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin mb-4" />
                         <p className="font-medium animate-pulse">Loading history...</p>
                     </div>
-                ) : filteredSessions.length === 0 ? (
+                ) : sessions.length === 0 ? (
                     <div className="text-center py-24 card-ultra-glass border-dashed group">
                         <div className="w-20 h-20 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-6 text-muted-foreground border border-border group-hover:bg-muted/80 transition-colors animate-breathe">
                             <Clock className="w-10 h-10" />
                         </div>
                         <h3 className="text-2xl font-bold text-foreground mb-2">
-                            {error ? 'Unable to Load History' : 'No Sessions Found'}
+                            {error ? 'Unable to Load History' : 'No Completed Sessions Yet'}
                         </h3>
                         <p className="text-muted-foreground mb-8 max-w-md mx-auto">
                             {error
                                 ? `There was a problem loading your sessions: ${error}. Please try refreshing the page.`
-                                : "You haven't started any training sessions yet. Launch a new scenario to get started."}
+                                : "Complete a conversation to see your session history and reports here."}
                         </p>
                         <button onClick={() => error ? window.location.reload() : navigate("/practice")} className="btn-ultra-modern btn-press px-8 py-3">
                             {error ? 'Refresh Page' : 'Start New Session'}
@@ -204,7 +129,7 @@ export default function SessionHistory() {
                     </div>
                 ) : (
                     <div className="grid gap-6">
-                        {filteredSessions.map((session, idx) => (
+                        {sessions.map((session, idx) => (
                             <motion.div
                                 key={session.id}
                                 initial={{ opacity: 0, y: 20 }}
@@ -221,15 +146,6 @@ export default function SessionHistory() {
                                             <Calendar className="w-3.5 h-3.5" />
                                             {formatDate(session.created_at)}
                                         </div>
-                                        {session.completed ? (
-                                            <span className="text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md flex items-center gap-1.5 border border-emerald-500/20">
-                                                <CheckCircle2 className="w-3.5 h-3.5" /> Completed
-                                            </span>
-                                        ) : (
-                                            <span className="text-amber-500 bg-amber-500/10 px-2 py-1 rounded-md flex items-center gap-1.5 border border-amber-500/20">
-                                                <PlayCircle className="w-3.5 h-3.5" /> In Progress
-                                            </span>
-                                        )}
                                         {/* Topic Badge */}
                                         <span className="text-primary bg-primary/10 px-2 py-1 rounded-md border border-primary/20">
                                             {session.topic.toUpperCase()}
@@ -272,7 +188,7 @@ export default function SessionHistory() {
                                 </div>
 
                                 <div className="flex items-center gap-6 justify-between md:justify-end md:flex-col lg:flex-row border-t md:border-t-0 border-border/50 pt-4 md:pt-0">
-                                    {session.completed && session.session_mode !== 'mentorship' && session.fit_score > 0 && (
+                                    {session.session_mode !== 'mentorship' && session.fit_score > 0 && (
                                         <div className="text-right">
                                             <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider mb-1">Score</div>
                                             <div className={`text-2xl sm:text-3xl font-black ${session.fit_score >= 7 ? 'text-emerald-500' : session.fit_score >= 5 ? 'text-amber-500' : 'text-rose-500'}`}>
@@ -280,7 +196,7 @@ export default function SessionHistory() {
                                             </div>
                                         </div>
                                     )}
-                                    {session.completed && session.session_mode === 'mentorship' && (
+                                    {session.session_mode === 'mentorship' && (
                                         <div className="text-right">
                                             <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider mb-1">Status</div>
                                             <div className="text-lg font-black text-purple-500">
@@ -290,21 +206,10 @@ export default function SessionHistory() {
                                     )}
 
                                     <button
-                                        onClick={() => session.completed ? navigate(`/report/${session.id}`) : navigate(`/conversation/${session.id}`)}
-                                        className={`min-w-[140px] px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all btn-press ${session.completed
-                                            ? 'bg-muted hover:bg-muted/80 text-foreground border border-border hover:border-border/80'
-                                            : 'btn-ultra-modern'
-                                            }`}
+                                        onClick={() => navigate(`/report/${session.id}`)}
+                                        className="min-w-[140px] px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all btn-press bg-muted hover:bg-muted/80 text-foreground border border-border hover:border-border/80"
                                     >
-                                        {session.completed ? (
-                                            <>
-                                                <Trophy className="w-4 h-4" /> View Report
-                                            </>
-                                        ) : (
-                                            <>
-                                                <PlayCircle className="w-4 h-4" /> Resume
-                                            </>
-                                        )}
+                                        <Trophy className="w-4 h-4" /> View Report
                                     </button>
                                 </div>
                             </motion.div>

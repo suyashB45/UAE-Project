@@ -10,7 +10,6 @@ import Profile from './pages/Profile'
 import ProtectedRoute from './components/ProtectedRoute'
 
 import Login from './pages/Login'
-
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import AuthCallback from './pages/AuthCallback'
@@ -31,7 +30,6 @@ function AppContent() {
                 <Routes location={location} key={location.pathname}>
                     <Route path="/" element={<Home />} />
                     <Route path="/login" element={<Login />} />
-
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/auth/callback" element={<AuthCallback />} />
