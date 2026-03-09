@@ -165,7 +165,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 QUESTIONS_FILE = os.path.join(BASE_DIR, "framework_questions.json")
 
 
-MAX_TURNS = 15 
 
 if os.getenv("AZURE_OPENAI_ENDPOINT"):
     USE_AZURE = True
@@ -235,6 +234,25 @@ def ensure_reports_dir() -> str:
     reports_dir = os.path.join(BASE_DIR, "..", "reports")
     os.makedirs(reports_dir, exist_ok=True)
     return reports_dir
+
+def truncate_transcript(history: List[Dict[str, str]], keep_first: int = 2, keep_last: int = 10) -> List[Dict[str, str]]:
+    """
+    Truncates the conversation history for the LLM to prevent context window overflow.
+    Keeps the very beginning of the conversation (setup) and the most recent turns.
+    """
+    if len(history) <= (keep_first + keep_last):
+        return history
+    
+    first_part = history[:keep_first]
+    last_part = history[-keep_last:]
+    
+    # Insert a marker indicating truncated content
+    omitted_marker = {
+        "role": "assistant",
+        "content": f"[...{len(history) - keep_first - keep_last} earlier turns omitted for brevity...]"
+    }
+    
+    return first_part + [omitted_marker] + last_part
 
 def detect_framework_fallback(text: str) -> str:
     text_lower = text.lower()
@@ -649,7 +667,7 @@ GOAL: Demonstrate how to coach Aamir (who is currently being played by the User)
 SCENARIO CONTEXT: {scenario}
 
 CONVERSATION SO FAR:
-{json.dumps(history, indent=2)}
+{json.dumps(truncate_transcript(history), indent=2)}
 """
         else:
             system = f"""You are Aamir, a sincere Sales Associate in a coaching conversation with your manager.
@@ -706,7 +724,7 @@ RESPONSE RULES:
 Current turn: {turn_count + 1}
 
 CONVERSATION SO FAR:
-{json.dumps(history, indent=2)}
+{json.dumps(truncate_transcript(history), indent=2)}
 """
         return [{"role": "system", "content": system}, {"role": "user", "content": f"User said: {latest_user}"}]
 
@@ -736,7 +754,7 @@ Keep each character's lines to 2-3 sentences. Use natural speech. NEVER break ch
 Current turn: {turn_count + 1}
 
 CONVERSATION SO FAR:
-{json.dumps(history, indent=2)}
+{json.dumps(truncate_transcript(history), indent=2)}
 """
         else:
             system = f"""You are playing TWO characters: [Rohan] and [Meera] in a workplace conflict mediation.
@@ -761,7 +779,7 @@ Keep each character's lines to 2-3 sentences. Use natural speech. NEVER break ch
 Current turn: {turn_count + 1}
 
 CONVERSATION SO FAR:
-{json.dumps(history, indent=2)}
+{json.dumps(truncate_transcript(history), indent=2)}
 """
         return [{"role": "system", "content": system}, {"role": "user", "content": f"User said: {latest_user}"}]
 
@@ -816,7 +834,7 @@ You are playing: {ai_role}
 Current turn: {turn_count + 1}
 
 ### CONVERSATION SO FAR:
-{json.dumps(history, indent=2)}
+{json.dumps(truncate_transcript(history), indent=2)}
 
 ### YOUR RESPONSE FORMAT:
 [Your realistic response as {ai_role}]
@@ -839,7 +857,7 @@ Current turn: {turn_count + 1}
 {scenario}
 
 ### CONVERSATION SO FAR:
-{json.dumps(history, indent=2)}
+{json.dumps(truncate_transcript(history), indent=2)}
 
 ### YOUR RESPONSE:
 Provide a response that demonstrates high-EQ, strategic communication.
@@ -1415,7 +1433,8 @@ def start_session():
         "meta": {"framework_counts": {}, "relevance_issues": 0}
     }
     SESSIONS[session_id] = session_data
-    # Only save to Supabase on session complete (with final report)
+    # Proactively save to Supabase so other Gunicorn workers can pick it up
+    save_session_to_db(session_data)
 
     return jsonify({
         "session_id": session_id, 
@@ -1507,8 +1526,9 @@ def chat(session_id: str):
         meta["framework_counts"] = counts
         sess["meta"] = meta
         
-    # Persist response in memory (only saved to Supabase on session complete)
+    # Persist response in memory and immediately sync to DB for multi-worker support
     sess["transcript"].append({"role": "assistant", "content": raw_response})
+    save_session_to_db(sess)
  
     return jsonify({
         "follow_up": clean_response, 

@@ -288,12 +288,29 @@ def detect_user_role_context(role: str, ai_role: str) -> str:
 # NEW: Parallel Analysis Functions for Speed Optimization
 # =====================================================================
 
+def truncate_transcript_for_report(transcript, max_turns=30):
+    """
+    Keep the transcript size manageable for the LLM during report generation.
+    Keeps first 5 and last (max_turns-5) turns.
+    """
+    if len(transcript) <= max_turns:
+        return transcript
+        
+    first_part = transcript[:5]
+    last_part = transcript[-(max_turns-5):]
+    
+    omitted = {"role": "assistant", "content": f"[...{len(transcript) - max_turns} earlier turns omitted...]"}
+    return first_part + [omitted] + last_part
+
 def analyze_character_traits(transcript, role, ai_role, scenario, scenario_type):
     """
     Analyze user's character/personality traits and assess fit for the scenario.
     This runs in PARALLEL with main report generation for speed.
     """
-    user_msgs = [t for t in transcript if t['role'] == 'user']
+    # Truncate to prevent token overflow
+    truncated_transcript = truncate_transcript_for_report(transcript)
+    
+    user_msgs = [t for t in truncated_transcript if t.get('role') == 'user']
     if not user_msgs:
         return {}
     
@@ -381,13 +398,16 @@ def analyze_questions_missed(transcript, role, ai_role, scenario, scenario_type)
     Identify questions the user SHOULD have asked but didn't.
     This runs in PARALLEL for speed.
     """
-    user_msgs = [t for t in transcript if t['role'] == 'user']
+    # Truncate to prevent token overflow
+    truncated_transcript = truncate_transcript_for_report(transcript)
+    
+    user_msgs = [t for t in truncated_transcript if t.get('role') == 'user']
     if not user_msgs:
         return {}
     
     conversation = "\n".join([
-        f"{'USER' if t['role'] == 'user' else 'ASSISTANT'}: {t['content']}" 
-        for t in transcript
+        f"{'USER' if t.get('role') == 'user' else 'ASSISTANT'}: {t.get('content', '')}" 
+        for t in truncated_transcript
     ])
     
     # Count questions user actually asked
@@ -684,8 +704,11 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
     )
 
     try:
+        # Truncate transcript to prevent token overflow
+        truncated_transcript = truncate_transcript_for_report(transcript, max_turns=40)
+        
         # Create conversation text for analysis
-        full_conversation = "\n".join([f"{'USER' if t['role'] == 'user' else 'ASSISTANT'}: {t['content']}" for t in transcript])
+        full_conversation = "\n".join([f"{'USER' if t.get('role') == 'user' else 'ASSISTANT'}: {t.get('content', '')}" for t in truncated_transcript])
         
         # Setup LangChain Parser
         parser = JsonOutputParser()
@@ -724,23 +747,23 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
                 transcript, role, ai_role, scenario, scenario_type
             )
             
-            # Wait with TIMEOUT: main=60s (critical), secondary=30s (optional)
+            # Wait with TIMEOUT: main=120s (critical), secondary=60s (optional)
             try:
-                raw_response = future_main.result(timeout=60)
+                raw_response = future_main.result(timeout=120)
             except concurrent.futures.TimeoutError:
-                print(f" [WARN] Main report timeout (60s) - using fallback", flush=True)
+                print(f" [WARN] Main report timeout (120s) - using fallback", flush=True)
                 raw_response = None
             
             try:
-                character_analysis = future_character.result(timeout=30)
+                character_analysis = future_character.result(timeout=60)
             except concurrent.futures.TimeoutError:
-                print(f" [WARN] Character analysis timeout (30s) - skipping", flush=True)
+                print(f" [WARN] Character analysis timeout (60s) - skipping", flush=True)
                 character_analysis = None
             
             try:
-                question_analysis = future_questions.result(timeout=30)
+                question_analysis = future_questions.result(timeout=60)
             except concurrent.futures.TimeoutError:
-                print(f" [WARN] Question analysis timeout (30s) - skipping", flush=True)
+                print(f" [WARN] Question analysis timeout (60s) - skipping", flush=True)
                 question_analysis = None
         
         t2 = dt.datetime.now()
