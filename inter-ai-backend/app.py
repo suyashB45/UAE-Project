@@ -1016,7 +1016,8 @@ def contact_sales():
             return jsonify({"error": "Invalid email format"}), 400
 
         # Store in Supabase
-        from database import supabase as db_client
+        from database import get_supabase
+        db_client = get_supabase()
         if db_client:
             db_client.table("contact_submissions").insert({
                 "name": name,

@@ -2,12 +2,73 @@ import os
 import json
 import gzip
 import base64
+import time
+import functools
 from datetime import datetime
 from supabase import create_client, Client
 
 url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY")
-supabase = create_client(url, key) if url and key else None
+
+# ---------------------------------------------------------
+# Resilient Supabase Client (auto-reconnect on PGRST002)
+# ---------------------------------------------------------
+_supabase_client = None
+
+def get_supabase() -> Client:
+    """Get the Supabase client, creating/recreating as needed."""
+    global _supabase_client
+    if not url or not key:
+        return None
+    if _supabase_client is None:
+        _supabase_client = create_client(url, key)
+        print("[DB] Supabase client created")
+    return _supabase_client
+
+def _recreate_supabase():
+    """Force-recreate the Supabase client (called on PGRST002 errors)."""
+    global _supabase_client
+    if url and key:
+        _supabase_client = create_client(url, key)
+        print("[DB] Supabase client RECREATED (connection recovery)")
+    return _supabase_client
+
+def _is_connection_error(error):
+    """Check if an error is a PostgREST connection issue (PGRST002)."""
+    error_str = str(error)
+    return "PGRST002" in error_str or "schema cache" in error_str
+
+def db_retry(max_retries=3, base_delay=1.0):
+    """Decorator that retries DB operations with exponential backoff.
+    
+    On PGRST002 errors, also recreates the Supabase client.
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_error = None
+            for attempt in range(1, max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_error = e
+                    if _is_connection_error(e):
+                        delay = base_delay * (2 ** (attempt - 1))
+                        print(f"[DB RETRY] PGRST002 detected in {func.__name__} "
+                              f"(attempt {attempt}/{max_retries}), "
+                              f"recreating client, retrying in {delay}s...")
+                        _recreate_supabase()
+                        time.sleep(delay)
+                    else:
+                        # Non-connection error, don't retry
+                        raise
+            # All retries exhausted
+            raise last_error
+        return wrapper
+    return decorator
+
+# Backward compatibility: keep 'supabase' as a module-level reference
+supabase = get_supabase()
 
 # ---------------------------------------------------------
 # Phase 3: Transcript Compression Utilities
@@ -85,8 +146,10 @@ def decompress_transcript(compressed) -> list:
         print(f"[COMPRESSION] Error decompressing transcript: {e}")
         return []
 
+@db_retry(max_retries=3, base_delay=1.0)
 def save_session_to_db(session_data):
-    if not supabase: return False
+    client = get_supabase()
+    if not client: return False
     
     session_id = session_data.get("id")
     user_id = session_data.get("user_id")
@@ -150,7 +213,7 @@ def save_session_to_db(session_data):
         
         # Upsert the session record in practice_history
         # The schema uses session_id as the primary key
-        res = supabase.table("practice_history").upsert(data_to_insert).execute()
+        res = client.table("practice_history").upsert(data_to_insert).execute()
         print(f"[SUCCESS] Saved session {session_id} to database.")
         return True
     except Exception as e:
@@ -159,10 +222,12 @@ def save_session_to_db(session_data):
         traceback.print_exc()
         return False
 
+@db_retry(max_retries=3, base_delay=1.0)
 def get_session_from_db(session_id):
-    if not supabase: return None
+    client = get_supabase()
+    if not client: return None
     try:
-        res = supabase.table("practice_history").select("*").eq("session_id", session_id).execute()
+        res = client.table("practice_history").select("*").eq("session_id", session_id).execute()
         if res.data and len(res.data) > 0:
             row = res.data[0]
             # Convert DB row format back to in-memory format
@@ -190,6 +255,7 @@ def get_session_from_db(session_id):
         print(f"[ERROR] DB Fetch failed for {session_id}: {e}")
         return None
 
+@db_retry(max_retries=3, base_delay=1.0)
 def get_user_sessions_from_db(user_id, limit=20, offset=0, completed_only=False):
     """Get paginated sessions for user.
     
@@ -197,12 +263,13 @@ def get_user_sessions_from_db(user_id, limit=20, offset=0, completed_only=False)
     This prevents large payloads and slow page loads for power users.
     When completed_only=True, returns only sessions with completed=True (has final report).
     """
-    if not supabase: 
+    client = get_supabase()
+    if not client: 
         return {"sessions": [], "total": 0, "limit": limit, "offset": offset}
     try:
         # Fetch with pagination using range()
         # count="exact" gives us the total count
-        query = supabase.table("practice_history")\
+        query = client.table("practice_history")\
             .select("session_id, user_id, scenario_type, session_mode, title, ai_character, mode, role, ai_role, scenario, framework, completed, created_at, score", count="exact")\
             .eq("user_id", user_id)
         
@@ -242,10 +309,12 @@ def get_user_sessions_from_db(user_id, limit=20, offset=0, completed_only=False)
         print(f"[ERROR] DB Fetch Sessions failed for user {user_id}: {e}")
         return {"sessions": [], "total": 0, "limit": limit, "offset": offset}
 
+@db_retry(max_retries=3, base_delay=1.0)
 def clear_user_sessions_from_db(user_id):
-    if not supabase: return False
+    client = get_supabase()
+    if not client: return False
     try:
-        res = supabase.table("practice_history").delete().eq("user_id", user_id).execute()
+        res = client.table("practice_history").delete().eq("user_id", user_id).execute()
         return True
     except Exception as e:
         print(f"[ERROR] DB Delete Sessions failed for user {user_id}: {e}")
